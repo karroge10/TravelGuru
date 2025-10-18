@@ -6,10 +6,14 @@ import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simp
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { TripDetails } from "@/components/trip-details"
+import { RouteLines } from "@/components/route-lines"
+import { NationalityDropdown } from "@/components/nationality-dropdown"
 import { getAllVisaRequirements, getLastUpdatedDate, type ProcessedVisaRequirement } from "@/lib/visa-api"
+import { calculateTotalDistance, type Country } from "@/lib/visa-data"
 import { getISOFromGeographyId, getCountryNameFromCode } from "@/lib/country-mapping"
-import type { Country } from "@/lib/visa-data"
+import { getVisaRequirementsForNationality, getVisaRequirementForCountry } from "@/lib/visa-service"
 import { Flag, RotateCcw, Undo2, Globe, Filter, Share2, Save, Download } from "lucide-react"
+import Image from "next/image"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,8 +37,8 @@ import { toast } from "sonner"
 const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json"
 
 interface WorldMapProps {
-  nationality: string
-  onChangeNationality: () => void
+  nationality: string | null
+  onNationalityChange: (nationality: string) => void
 }
 
 type Step = "select-start" | "select-destination" | "adding-countries"
@@ -120,7 +124,7 @@ function GeographiesWrapper({
   )
 }
 
-export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
+export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
   const [step, setStep] = useState<Step>("select-start")
   const [route, setRoute] = useState<Country[]>([])
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null)
@@ -129,25 +133,38 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
   const [isRoutePlanned, setIsRoutePlanned] = useState(false)
   const [showResetDialog, setShowResetDialog] = useState(false)
   const [showVisaFreeOnly, setShowVisaFreeOnly] = useState(false)
+  const [showVisaRequiredOnly, setShowVisaRequiredOnly] = useState(false)
+  const [showEVisaOnly, setShowEVisaOnly] = useState(false)
+  const [showOnArrivalOnly, setShowOnArrivalOnly] = useState(false)
   const [allGeographies, setAllGeographies] = useState<any[]>([])
   const [visaRequirements, setVisaRequirements] = useState<Record<string, ProcessedVisaRequirement>>({})
   const [isLoadingVisa, setIsLoadingVisa] = useState(true)
 
+  // All useEffect hooks must be called before any conditional returns
   useEffect(() => {
+    if (!nationality) return
+    
     const fetchVisaData = async () => {
       setIsLoadingVisa(true)
       try {
-        const data = await getAllVisaRequirements(nationality)
+        const result = await getVisaRequirementsForNationality(nationality)
         
-        if (Object.keys(data).length === 0) {
+        if (result.error) {
+          toast.error("Failed to load visa requirements", {
+            description: result.error.message,
+          })
+          setVisaRequirements({})
+        } else if (result.data) {
+          setVisaRequirements(result.data)
+        } else {
+          setVisaRequirements({})
         }
-        
-        setVisaRequirements(data)
         
       } catch (error) {
         toast.error("Failed to load visa requirements", {
-          description: "Using fallback data. Some information may be limited.",
+          description: "Network error occurred. Please try again.",
         })
+        setVisaRequirements({})
       } finally {
         setIsLoadingVisa(false)
       }
@@ -158,7 +175,7 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
 
   useEffect(() => {
     // Only run on client side to avoid hydration mismatch
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined' || !nationality) return
     
     const savedTrip = localStorage.getItem(`trip-${nationality}`)
     if (savedTrip) {
@@ -187,7 +204,7 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
 
   useEffect(() => {
     // Only run on client side to avoid hydration mismatch
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined' || !nationality) return
     
     if (route.length > 0) {
       localStorage.setItem(`trip-${nationality}`, JSON.stringify({ route, isPlanned: isRoutePlanned }))
@@ -221,6 +238,31 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
     return () => window.removeEventListener("keydown", handleKeyPress)
   }, [route, isRoutePlanned, showResetDialog])
 
+  if (!nationality) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6 overflow-hidden">
+            <Image 
+              src="/logo.jpg" 
+              alt="TravelGuru Logo" 
+              width={80} 
+              height={80} 
+              className="object-cover rounded-full"
+              priority
+            />
+          </div>
+          <h1 className="text-4xl font-bold mb-3">TravelGuru</h1>
+          <p className="text-muted-foreground text-lg mb-8">Select your nationality to start planning your visa-free travel routes</p>
+          <NationalityDropdown 
+            nationality={nationality} 
+            onNationalityChange={onNationalityChange}
+            className="text-lg px-6 py-3"
+          />
+        </div>
+      </div>
+    )
+  }
 
   const handleCountryClick = (geo: any) => {
     if (isRoutePlanned) return
@@ -245,7 +287,6 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
       toast.success(`Destination: ${countryName}`)
     } else if (step === "adding-countries") {
       setRoute([...route, { name: countryName, id: countryId, coordinates: getCentroid(geo) }])
-      toast.success(`Added: ${countryName}`)
     }
   }
 
@@ -281,13 +322,8 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
     // Convert geography ID to ISO code for API lookup
     const isoCode = getISOFromGeographyId(countryId)
     
-    // Special case: if looking up visa requirements for own country
-    let visaReq = null
-    if (isoCode === nationality) {
-      visaReq = { requirement: "visa-free" }
-    } else {
-      visaReq = isoCode ? visaRequirements[isoCode] : null
-    }
+    // Get visa requirement using the new service (API-only)
+    const visaReq = isoCode ? getVisaRequirementForCountry(isoCode, nationality!, visaRequirements) : null
 
     if (isInRoute && isRoutePlanned) {
       // Show actual visa requirement colors for countries in the planned route
@@ -322,13 +358,34 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
       return "#1a1f2e"
     }
 
-    if (showVisaFreeOnly && !isRoutePlanned) {
-      // Show visa-free filter colors only when not in planned mode
+    // Check if any filters are active
+    const hasActiveFilters = showVisaFreeOnly || showVisaRequiredOnly || showEVisaOnly || showOnArrivalOnly
+    
+    if (hasActiveFilters && !isRoutePlanned) {
+      // Show filtered colors when any filter is active and not in planned mode
       const requirement = visaReq?.requirement || ""
-
-      if (requirement === "visa-free") {
-        return "oklch(0.65 0.18 140)"
+      
+      // Check if this country matches any of the active filters
+      const matchesFilter = 
+        (showVisaFreeOnly && requirement === "visa-free") ||
+        (showVisaRequiredOnly && requirement === "visa-required") ||
+        (showEVisaOnly && requirement === "e-visa") ||
+        (showOnArrivalOnly && requirement === "visa-on-arrival")
+      
+      if (matchesFilter) {
+        // Return appropriate color based on requirement
+        if (requirement === "visa-free") {
+          return "oklch(0.65 0.18 140)" // Green
+        } else if (requirement === "visa-required") {
+          return "oklch(0.55 0.22 25)" // Orange/Red
+        } else if (requirement === "e-visa") {
+          return "oklch(0.60 0.18 280)" // Purple
+        } else if (requirement === "visa-on-arrival") {
+          return "oklch(0.70 0.20 60)" // Yellow
+        }
       }
+      
+      // Country doesn't match any active filter
       return "oklch(0.15 0.01 240)"
     }
 
@@ -421,12 +478,40 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
       countries: route.map((c) => c.name),
     }
 
-    const shareText = `My trip: ${route.map((c) => c.name).join(" → ")}`
+    // Calculate trip statistics
+    const totalDistance = calculateTotalDistance(route)
+    const visaFreeCount = route.filter((c) => {
+      const geo = allGeographies.find((g) => g.properties.name === c.name)
+      const isoCode = geo ? getISOFromGeographyId(geo.id) : null
+      
+      let apiVisaReq = null
+      if (isoCode === nationality) {
+        apiVisaReq = { requirement: "visa-free" }
+      } else {
+        apiVisaReq = isoCode ? visaRequirements[isoCode] : null
+      }
+      
+      const requirement = apiVisaReq?.requirement || 'unknown'
+      return requirement === "visa-free"
+    }).length
+
+    const shareText = `🌍 My TravelGuru Trip Plan
+
+📍 Route: ${route.map((c) => c.name).join(" → ")}
+
+📊 Trip Stats:
+• Total Distance: ${totalDistance.toLocaleString()} km
+• Countries: ${route.length}
+• Visa-free countries: ${visaFreeCount}/${route.length}
+
+👤 Traveler: ${getCountryNameFromCode(nationality)} passport holder
+
+Plan your own visa-free routes at TravelGuru!`
 
     if (typeof window !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
-          title: "My Trip Plan",
+          title: "My TravelGuru Trip Plan",
           text: shareText,
         })
         toast.success("Shared successfully!")
@@ -457,12 +542,16 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
 
     const tripData = {
       nationality,
-      route: route.map((c) => ({
-        name: c.name,
-        dates: c.dates,
-        notes: c.notes,
-        visa: getVisaRequirementForCountry(c.name),
-      })),
+      route: route.map((c) => {
+        const geo = allGeographies.find((g) => g.properties.name === c.name)
+        const isoCode = geo ? getISOFromGeographyId(geo.id) : null
+        return {
+          name: c.name,
+          dates: c.dates,
+          notes: c.notes,
+          visa: isoCode ? getVisaRequirementForCountry(isoCode, nationality!, visaRequirements) : null,
+        }
+      }),
       totalDistance: calculateTotalDistance(route),
       totalVisaCost: calculateTotalVisaCost(route),
       exportedAt: new Date().toISOString(),
@@ -525,33 +614,6 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
     return { x, y }
   }
 
-  const getVisaRequirementForCountry = (countryName: string) => {
-    const geo = allGeographies.find((g) => g.properties.name === countryName)
-    if (!geo) {
-      return { requirement: "unknown", notes: "Information not available" }
-    }
-
-    // Convert geography ID to ISO code for API lookup
-    const isoCode = getISOFromGeographyId(geo.id)
-    
-    // Special case: if looking up visa requirements for own country
-    if (isoCode === nationality) {
-      return { 
-        requirement: "visa-free", 
-        notes: "No visa required for own country",
-        country: countryName,
-        countryCode: isoCode
-      }
-    }
-    
-    const visaReq = isoCode ? visaRequirements[isoCode] : null
-    
-    if (!visaReq) {
-    }
-    
-    return visaReq || { requirement: "unknown", notes: "Information not available" }
-  }
-
   const calculateTotalDistance = (routeData: Country[]): number => {
     let total = 0
     for (let i = 0; i < routeData.length - 1; i++) {
@@ -563,7 +625,9 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
   const calculateTotalVisaCost = (routeData: Country[]): number => {
     const total = 0
     routeData.forEach((country) => {
-      const visa = getVisaRequirementForCountry(country.name)
+      const geo = allGeographies.find((g) => g.properties.name === country.name)
+      const isoCode = geo ? getISOFromGeographyId(geo.id) : null
+      const visa = isoCode ? getVisaRequirementForCountry(isoCode, nationality!, visaRequirements) : null
       // API doesn't provide cost data, so we'll return 0 for now
       // This can be enhanced when cost data is available
     })
@@ -574,52 +638,10 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm z-10 flex-shrink-0">
-        <div className="container mx-auto px-4 py-4">
+        <div className="px-4 py-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold mb-1">Plan Your Route</h1>
-              <div className="flex items-center gap-2 text-sm flex-wrap">
-                {!isRoutePlanned ? (
-                  <>
-                    <div
-                      className={`flex items-center gap-2 ${step === "select-start" ? "text-primary font-medium" : "text-muted-foreground"}`}
-                    >
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${step === "select-start" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
-                      >
-                        1
-                      </div>
-                      <span>Select start country</span>
-                    </div>
-                    <span className="text-muted-foreground">→</span>
-                    <div
-                      className={`flex items-center gap-2 ${step === "select-destination" ? "text-primary font-medium" : "text-muted-foreground"}`}
-                    >
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${step === "select-destination" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
-                      >
-                        2
-                      </div>
-                      <span>Select destination</span>
-                    </div>
-                    {step === "adding-countries" && (
-                      <>
-                        <span className="text-muted-foreground">→</span>
-                        <div className="flex items-center gap-2 text-primary font-medium">
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs bg-primary text-primary-foreground">
-                            3
-                          </div>
-                          <span>Add more countries (optional)</span>
-                        </div>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-muted-foreground">
-                    Route planned! Countries are color-coded by visa requirements.
-                  </p>
-                )}
-              </div>
+              <h1 className="text-2xl font-bold">TravelGuru</h1>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
               <DropdownMenu>
@@ -631,15 +653,25 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuCheckboxItem checked={showVisaFreeOnly} onCheckedChange={setShowVisaFreeOnly}>
-                    Show visa-free only
+                    Visa-Free
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={showVisaRequiredOnly} onCheckedChange={setShowVisaRequiredOnly}>
+                    Visa Required
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={showEVisaOnly} onCheckedChange={setShowEVisaOnly}>
+                    E-Visa
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={showOnArrivalOnly} onCheckedChange={setShowOnArrivalOnly}>
+                    Visa on Arrival
                   </DropdownMenuCheckboxItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button variant="ghost" size="sm" onClick={onChangeNationality} className="gap-2">
-                <Globe className="w-4 h-4" />
-                <span className="hidden sm:inline">{getCountryNameFromCode(nationality)}</span>
-              </Button>
+              <NationalityDropdown 
+                nationality={nationality} 
+                onNationalityChange={onNationalityChange}
+                className="gap-2"
+              />
 
               {route.length > 0 && !isRoutePlanned && (
                 <Button variant="outline" size="sm" onClick={handleUndoLast} className="gap-2 bg-transparent">
@@ -751,6 +783,9 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
                 isRoutePlanned={isRoutePlanned}
               />
 
+              {/* Render curved dotted lines between countries */}
+              {route.length > 1 && <RouteLines route={route} />}
+
             </ZoomableGroup>
           </ComposableMap>
 
@@ -769,7 +804,12 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
                 <Card className="px-4 py-2 bg-card/95 backdrop-blur-sm border-primary/20 shadow-lg">
                   <p className="text-sm font-medium">{hoveredCountry}</p>
                   <p className="text-xs text-muted-foreground capitalize">
-                    {getVisaRequirementForCountry(hoveredCountry).requirement?.replace("-", " ") || "Unknown"}
+                    {(() => {
+                      const geo = allGeographies.find((g) => g.properties.name === hoveredCountry)
+                      const isoCode = geo ? getISOFromGeographyId(geo.id) : null
+                      const visaReq = isoCode ? getVisaRequirementForCountry(isoCode, nationality!, visaRequirements) : null
+                      return visaReq?.requirement?.replace("-", " ") || "Unknown"
+                    })()}
                   </p>
                 </Card>
               </motion.div>

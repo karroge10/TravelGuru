@@ -15,9 +15,43 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Interactive Trip Planner",
+  title: "TravelGuru",
   description: "Plan your visa-free travel routes around the world",
-    generator: 'v0.app'
+  generator: 'v0.app',
+  icons: {
+    icon: [
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any' }
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }
+    ],
+    other: [
+      { url: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' }
+    ]
+  },
+  manifest: '/site.webmanifest',
+  openGraph: {
+    title: "TravelGuru",
+    description: "Plan your visa-free travel routes around the world",
+    type: "website",
+    images: [
+      {
+        url: "/logo.jpg",
+        width: 1200,
+        height: 630,
+        alt: "TravelGuru Logo"
+      }
+    ]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TravelGuru",
+    description: "Plan your visa-free travel routes around the world",
+    images: ["/logo.jpg"]
+  }
 }
 
 export default function RootLayout({

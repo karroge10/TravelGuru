@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { getVisaRequirement, calculateTotalDistance, type Country } from "@/lib/visa-data"
+import { calculateTotalDistance, type Country } from "@/lib/visa-data"
 import { ProcessedVisaRequirement } from "@/lib/visa-api"
 import { getISOFromGeographyId, getCountryNameFromCode } from "@/lib/country-mapping"
+import { getVisaRequirementForCountry } from "@/lib/visa-service"
 import {
   X,
   Clock,
@@ -143,29 +144,14 @@ function CountryItem({
   const isStart = index === 0
   const isEnd = index === route.length - 1
 
-  // Try to get visa requirement from API data first, then fallback
+  // Get visa requirement using the new service
   const geo = allGeographies.find((g) => g.properties.name === country.name)
   const isoCode = geo ? getISOFromGeographyId(geo.id) : null
-  
-  // Special case: if looking up visa requirements for own country
-  let apiVisaReq = null
-  if (isoCode === nationality) {
-    apiVisaReq = { 
-      requirement: "visa-free", 
-      notes: "No visa required for own country",
-      country: country.name,
-      countryCode: isoCode
-    }
-  } else {
-    apiVisaReq = isoCode ? visaRequirements[isoCode] : null
-  }
-  
-  const fallbackVisaReq = getVisaRequirement(nationality, country.name)
-  const visaReq = apiVisaReq || fallbackVisaReq
+  const visaReq = isoCode ? getVisaRequirementForCountry(isoCode, nationality, visaRequirements) : null
   
   
   // Normalize the requirement type
-  const requirementType = apiVisaReq?.requirement || fallbackVisaReq.type
+  const requirementType = visaReq?.requirement || 'unknown'
 
   const getVisaColor = (type: string) => {
     switch (type) {
@@ -316,19 +302,19 @@ function CountryItem({
                           </div>
                         </div>
 
-                        {apiVisaReq?.duration && (
+                        {visaReq?.duration && (
                           <div className="flex items-start gap-2">
                             <Clock className="w-4 h-4 text-muted-foreground mt-0.5" />
                             <div>
                               <p className="text-sm font-medium">Duration</p>
-                              <p className="text-sm text-muted-foreground">{apiVisaReq.duration} days</p>
+                              <p className="text-sm text-muted-foreground">{visaReq.duration} days</p>
                             </div>
                           </div>
                         )}
 
-                        {(apiVisaReq?.notes || (fallbackVisaReq.notes && !apiVisaReq)) && (
+                        {visaReq?.notes && (
                           <div className="pt-2 border-t border-border">
-                            <p className="text-xs text-muted-foreground">{apiVisaReq?.notes || fallbackVisaReq.notes}</p>
+                            <p className="text-xs text-muted-foreground">{visaReq.notes}</p>
                           </div>
                         )}
 
@@ -429,18 +415,8 @@ export function TripDetails({ route, nationality, onRemove, onMove, onUpdate, is
   const visaFreeCount = route.filter((c) => {
     const geo = allGeographies.find((g) => g.properties.name === c.name)
     const isoCode = geo ? getISOFromGeographyId(geo.id) : null
-    
-    // Special case: own country is always visa-free
-    let apiVisaReq = null
-    if (isoCode === nationality) {
-      apiVisaReq = { requirement: "visa-free" }
-    } else {
-      apiVisaReq = isoCode ? visaRequirements[isoCode] : null
-    }
-    
-    const fallbackVisaReq = getVisaRequirement(nationality, c.name)
-    const requirement = apiVisaReq?.requirement || fallbackVisaReq.type
-    return requirement === "visa-free"
+    const visaReq = isoCode ? getVisaRequirementForCountry(isoCode, nationality, visaRequirements) : null
+    return visaReq?.requirement === "visa-free"
   }).length
 
   return (
