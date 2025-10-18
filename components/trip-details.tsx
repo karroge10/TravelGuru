@@ -19,10 +19,30 @@ import {
   StickyNote,
   MapPin,
   Plane,
+  GripVertical,
 } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useState } from "react"
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import {
+  useSortable,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 interface TripDetailsProps {
   route: Country[]
@@ -35,8 +55,8 @@ interface TripDetailsProps {
   allGeographies: any[]
 }
 
-// Country Item Component
-function CountryItem({ 
+// Sortable Country Item Component
+function SortableCountryItem({ 
   country, 
   index, 
   route, 
@@ -56,6 +76,68 @@ function CountryItem({
   isPlanned: boolean
   visaRequirements: Record<string, ProcessedVisaRequirement>
   allGeographies: any[]
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: country.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className={isDragging ? "z-50" : ""}>
+      <CountryItem
+        country={country}
+        index={index}
+        route={route}
+        nationality={nationality}
+        onRemove={onRemove}
+        onUpdate={onUpdate}
+        isPlanned={isPlanned}
+        visaRequirements={visaRequirements}
+        allGeographies={allGeographies}
+        dragAttributes={attributes}
+        dragListeners={listeners}
+        isDragging={isDragging}
+      />
+    </div>
+  )
+}
+
+// Country Item Component
+function CountryItem({ 
+  country, 
+  index, 
+  route, 
+  nationality, 
+  onRemove, 
+  onUpdate, 
+  isPlanned, 
+  visaRequirements, 
+  allGeographies,
+  dragAttributes,
+  dragListeners,
+  isDragging
+}: {
+  country: Country
+  index: number
+  route: Country[]
+  nationality: string
+  onRemove: (index: number) => void
+  onUpdate: (index: number, updates: Partial<Country>) => void
+  isPlanned: boolean
+  visaRequirements: Record<string, ProcessedVisaRequirement>
+  allGeographies: any[]
+  dragAttributes?: any
+  dragListeners?: any
+  isDragging?: boolean
 }) {
 
   const isStart = index === 0
@@ -132,9 +214,21 @@ function CountryItem({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
+      className={isDragging ? "opacity-50" : ""}
     >
       <Card className="p-4 bg-card border-border/50 hover:border-primary/50 transition-colors">
         <div className="flex items-start gap-3">
+          {/* Drag Handle */}
+          <div className="flex flex-col items-center gap-2 pt-1">
+            <div 
+              {...dragAttributes} 
+              {...dragListeners}
+              className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded transition-colors"
+              title="Drag to reorder"
+            >
+              <GripVertical className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </div>
 
           <div className="flex flex-col items-center gap-2 pt-1">
             {isStart ? (
@@ -313,6 +407,23 @@ function CountryItem({
 }
 
 export function TripDetails({ route, nationality, onRemove, onMove, onUpdate, isPlanned, visaRequirements, allGeographies }: TripDetailsProps) {
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      const oldIndex = route.findIndex((item) => item.id === active.id)
+      const newIndex = route.findIndex((item) => item.id === over.id)
+      
+      onMove(oldIndex, newIndex)
+    }
+  }
 
   const totalDistance = calculateTotalDistance(route)
   const visaFreeCount = route.filter((c) => {
@@ -345,6 +456,11 @@ export function TripDetails({ route, nationality, onRemove, onMove, onUpdate, is
           <p className="text-sm text-muted-foreground">
             {route.length} {route.length === 1 ? "country" : "countries"} in your route
           </p>
+          {route.length > 1 && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Drag countries to reorder your trip
+            </p>
+          )}
         </div>
 
         {isPlanned && (
@@ -376,23 +492,33 @@ export function TripDetails({ route, nationality, onRemove, onMove, onUpdate, is
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar">
-        <div className="space-y-3">
-          {route.map((country, index) => (
-            <CountryItem
-              key={country.id}
-              country={country}
-              index={index}
-              route={route}
-              nationality={nationality}
-              onRemove={onRemove}
-              onUpdate={onUpdate}
-              isPlanned={isPlanned}
-              visaRequirements={visaRequirements}
-              allGeographies={allGeographies}
-            />
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={route.map(c => c.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-3">
+              {route.map((country, index) => (
+                <SortableCountryItem
+                  key={country.id}
+                  country={country}
+                  index={index}
+                  route={route}
+                  nationality={nationality}
+                  onRemove={onRemove}
+                  onUpdate={onUpdate}
+                  isPlanned={isPlanned}
+                  visaRequirements={visaRequirements}
+                  allGeographies={allGeographies}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       </div>
     </motion.div>
   )
 }
+
+
