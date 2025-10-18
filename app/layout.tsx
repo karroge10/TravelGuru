@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "TravelGuru",
+  title: "Visa Planner",
   description: "Plan your visa-free travel routes around the world",
   generator: 'v0.app',
   icons: {
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   },
   manifest: '/site.webmanifest',
   openGraph: {
-    title: "TravelGuru",
+    title: "Visa Planner",
     description: "Plan your visa-free travel routes around the world",
     type: "website",
     images: [
@@ -42,13 +42,13 @@ export const metadata: Metadata = {
         url: "/logo.jpg",
         width: 1200,
         height: 630,
-        alt: "TravelGuru Logo"
+        alt: "Visa Planner Logo"
       }
     ]
   },
   twitter: {
     card: "summary_large_image",
-    title: "TravelGuru",
+    title: "Visa Planner",
     description: "Plan your visa-free travel routes around the world",
     images: ["/logo.jpg"]
   }

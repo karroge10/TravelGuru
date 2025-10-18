@@ -245,14 +245,14 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
           <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6 overflow-hidden">
             <Image 
               src="/logo.jpg" 
-              alt="TravelGuru Logo" 
+              alt="Visa Planner Logo" 
               width={80} 
               height={80} 
               className="object-cover rounded-full"
               priority
             />
           </div>
-          <h1 className="text-4xl font-bold mb-3">TravelGuru</h1>
+          <h1 className="text-4xl font-bold mb-3">Visa Planner</h1>
           <p className="text-muted-foreground text-lg mb-8">Select your nationality to start planning your visa-free travel routes</p>
           <NationalityDropdown 
             nationality={nationality} 
@@ -495,7 +495,7 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
       return requirement === "visa-free"
     }).length
 
-    const shareText = `🌍 My TravelGuru Trip Plan
+    const shareText = `🌍 My Visa Planner Trip Plan
 
 📍 Route: ${route.map((c) => c.name).join(" → ")}
 
@@ -506,12 +506,12 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
 
 👤 Traveler: ${getCountryNameFromCode(nationality)} passport holder
 
-Plan your own visa-free routes at TravelGuru!`
+Plan your own visa-free routes at Visa Planner!`
 
     if (typeof window !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
-          title: "My TravelGuru Trip Plan",
+          title: "My Visa Planner Trip Plan",
           text: shareText,
         })
         toast.success("Shared successfully!")
@@ -641,7 +641,7 @@ Plan your own visa-free routes at TravelGuru!`
         <div className="px-4 py-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold">TravelGuru</h1>
+              <h1 className="text-2xl font-bold">Visa Planner</h1>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
               <DropdownMenu>
