@@ -732,6 +732,10 @@ export function WorldMap({ nationality, onChangeNationality }: WorldMapProps) {
               zoom={position.zoom}
               center={position.coordinates as [number, number]}
               onMoveEnd={(position) => setPosition(position)}
+              translateExtent={[
+                [-100, -200],  // Southwest boundary (left, bottom) - extended bottom for Antarctica
+                [800, 750]     // Northeast boundary (right, top) - keeping good top/right
+              ]}
             >
               <GeographiesWrapper 
                 geoUrl={geoUrl}
