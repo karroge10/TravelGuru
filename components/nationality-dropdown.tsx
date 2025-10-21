@@ -244,9 +244,12 @@ export function NationalityDropdown({ nationality, onNationalityChange, classNam
           <span className="hidden sm:inline">
             {selectedCountry ? selectedCountry.name : "Select nationality"}
           </span>
+          <span className="sm:hidden">
+            {selectedCountry ? selectedCountry.name : "Select"}
+          </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent className="w-[90vw] sm:w-[300px] p-0" align="center" side="bottom" sideOffset={5}>
         <Command>
           <CommandInput placeholder="Search countries..." />
           <CommandList>

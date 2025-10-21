@@ -262,7 +262,7 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
 
   if (!nationality) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center sm:items-center justify-center pb-40 sm:pt-0">
         <div className="text-center">
           <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6 overflow-hidden">
             <Image 
