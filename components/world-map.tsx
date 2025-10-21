@@ -892,7 +892,7 @@ Plan your own visa-free routes at Visa Planner!`
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-40"
+              className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-40"
             >
               <Card 
                 className="px-4 py-3 bg-card/95 backdrop-blur-sm border-primary/20 shadow-lg cursor-pointer hover:bg-card/90 transition-colors"
