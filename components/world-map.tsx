@@ -33,6 +33,7 @@ import {
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json"
 
@@ -93,6 +94,18 @@ function GeographiesWrapper({
                 onMouseMove={(e: React.MouseEvent) => {
                   setMousePosition({ x: e.clientX, y: e.clientY })
                 }}
+                onTouchStart={(e: React.TouchEvent) => {
+                  const touch = e.touches[0]
+                  setHoveredCountry(geo.properties.name)
+                  setMousePosition({ x: touch.clientX, y: touch.clientY })
+                }}
+                onTouchEnd={() => {
+                  // Keep tooltip visible for a short time on touch end
+                  setTimeout(() => {
+                    setHoveredCountry(null)
+                    setMousePosition(null)
+                  }, 1000)
+                }}
                 style={{
                   default: {
                     fill: getCountryColor(geo),
@@ -125,6 +138,7 @@ function GeographiesWrapper({
 }
 
 export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
+  const isMobile = useIsMobile()
   const [step, setStep] = useState<Step>("select-start")
   const [route, setRoute] = useState<Country[]>([])
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null)
@@ -139,6 +153,7 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
   const [allGeographies, setAllGeographies] = useState<any[]>([])
   const [visaRequirements, setVisaRequirements] = useState<Record<string, ProcessedVisaRequirement>>({})
   const [isLoadingVisa, setIsLoadingVisa] = useState(true)
+  const [showTripDetails, setShowTripDetails] = useState(false)
 
   // All useEffect hooks must be called before any conditional returns
   useEffect(() => {
@@ -589,9 +604,9 @@ Plan your own visa-free routes at Visa Planner!`
   }
 
   const getTooltipPosition = (mousePos: { x: number; y: number }) => {
-    const tooltipWidth = 200 // Approximate tooltip width
-    const tooltipHeight = 60 // Approximate tooltip height
-    const offset = 10
+    const tooltipWidth = isMobile ? 180 : 200 // Smaller on mobile
+    const tooltipHeight = isMobile ? 50 : 60 // Smaller on mobile
+    const offset = isMobile ? 5 : 10 // Smaller offset on mobile
     
     let x = mousePos.x + offset
     let y = mousePos.y - offset
@@ -599,6 +614,11 @@ Plan your own visa-free routes at Visa Planner!`
     // Prevent going off right edge
     if (x + tooltipWidth > window.innerWidth) {
       x = mousePos.x - tooltipWidth - offset
+    }
+    
+    // Prevent going off left edge
+    if (x < 0) {
+      x = offset
     }
     
     // Prevent going off top edge
@@ -638,66 +658,63 @@ Plan your own visa-free routes at Visa Planner!`
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm z-10 flex-shrink-0">
-        <div className="px-4 py-4">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="px-3 py-3 sm:px-4 sm:py-4">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold">Visa Planner</h1>
+              <h1 className="text-lg sm:text-2xl font-bold">Visa Planner</h1>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2 bg-transparent">
-                    <Filter className="w-4 h-4" />
-                    <span className="hidden sm:inline">Filter</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuCheckboxItem checked={showVisaFreeOnly} onCheckedChange={setShowVisaFreeOnly}>
-                    Visa-Free
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem checked={showVisaRequiredOnly} onCheckedChange={setShowVisaRequiredOnly}>
-                    Visa Required
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem checked={showEVisaOnly} onCheckedChange={setShowEVisaOnly}>
-                    E-Visa
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem checked={showOnArrivalOnly} onCheckedChange={setShowOnArrivalOnly}>
-                    Visa on Arrival
-                  </DropdownMenuCheckboxItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+              {!isRoutePlanned && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1 sm:gap-2 bg-transparent h-8 sm:h-9">
+                      <Filter className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Filter</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuCheckboxItem checked={showVisaFreeOnly} onCheckedChange={setShowVisaFreeOnly}>
+                      Visa-Free
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={showVisaRequiredOnly} onCheckedChange={setShowVisaRequiredOnly}>
+                      Visa Required
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={showEVisaOnly} onCheckedChange={setShowEVisaOnly}>
+                      E-Visa
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={showOnArrivalOnly} onCheckedChange={setShowOnArrivalOnly}>
+                      Visa on Arrival
+                    </DropdownMenuCheckboxItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
 
               <NationalityDropdown 
                 nationality={nationality} 
                 onNationalityChange={onNationalityChange}
-                className="gap-2"
+                className="gap-1 sm:gap-2 h-8 sm:h-9"
               />
-
-              {route.length > 0 && !isRoutePlanned && (
-                <Button variant="outline" size="sm" onClick={handleUndoLast} className="gap-2 bg-transparent">
-                  <Undo2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Undo</span>
-                </Button>
-              )}
 
 
               {route.length >= 2 && !isRoutePlanned && (
-                <Button onClick={handlePlanRoute} size="sm" className="gap-2">
-                  <Flag className="w-4 h-4" />
-                  Plan Route
+                <Button onClick={handlePlanRoute} size="sm" className="gap-1 sm:gap-2 h-8 sm:h-9">
+                  <Flag className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Plan Route</span>
+                  <span className="sm:hidden">Plan</span>
                 </Button>
               )}
 
               {isRoutePlanned && (
                 <>
-                  <Button onClick={handleCancelPlanning} variant="outline" size="sm" className="gap-2 bg-transparent">
-                    Edit Route
+                  <Button onClick={handleCancelPlanning} variant="outline" size="sm" className="gap-1 sm:gap-2 bg-transparent h-8 sm:h-9">
+                    <span className="hidden sm:inline">Edit Route</span>
+                    <span className="sm:hidden">Edit</span>
                   </Button>
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="gap-2 bg-transparent">
-                        <Share2 className="w-4 h-4" />
+                      <Button variant="outline" size="sm" className="gap-1 sm:gap-2 bg-transparent h-8 sm:h-9">
+                        <Share2 className="w-3 h-3 sm:w-4 sm:h-4" />
                         <span className="hidden sm:inline">Share</span>
                       </Button>
                     </DropdownMenuTrigger>
@@ -718,27 +735,72 @@ Plan your own visa-free routes at Visa Planner!`
                     </DropdownMenuContent>
                   </DropdownMenu>
 
-                  <Button onClick={() => setShowResetDialog(true)} variant="outline" size="sm" className="gap-2">
-                    <RotateCcw className="w-4 h-4" />
+                  <Button onClick={() => setShowResetDialog(true)} variant="outline" size="sm" className="gap-1 sm:gap-2 h-8 sm:h-9">
+                    <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
                     <span className="hidden sm:inline">Reset</span>
                   </Button>
                 </>
               )}
 
               {route.length > 0 && !isRoutePlanned && (
-                <Button onClick={() => setShowResetDialog(true)} variant="ghost" size="sm" className="gap-2">
-                  <RotateCcw className="w-4 h-4" />
+                <Button onClick={() => setShowResetDialog(true)} variant="ghost" size="sm" className="gap-1 sm:gap-2 h-8 sm:h-9">
+                  <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
                   <span className="hidden sm:inline">Reset</span>
                 </Button>
               )}
+
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 relative">
         {/* Map */}
-        <div className="flex-1 relative bg-background overflow-hidden">
+        <div className={`flex-1 relative bg-background overflow-hidden ${isMobile && showTripDetails ? 'hidden' : ''}`}>
+          {/* Mobile swipe-up area for trip details */}
+          {isMobile && isRoutePlanned && route.length > 0 && (
+            <div 
+              className="absolute bottom-0 left-0 right-0 h-20 z-30 cursor-pointer"
+              onClick={() => setShowTripDetails(true)}
+              onMouseDown={(e) => {
+                const startY = e.clientY
+                const handleMouseMove = (e: MouseEvent) => {
+                  const currentY = e.clientY
+                  const deltaY = startY - currentY
+                  if (deltaY > 50) {
+                    setShowTripDetails(true)
+                    document.removeEventListener('mousemove', handleMouseMove)
+                    document.removeEventListener('mouseup', handleMouseUp)
+                  }
+                }
+                const handleMouseUp = () => {
+                  document.removeEventListener('mousemove', handleMouseMove)
+                  document.removeEventListener('mouseup', handleMouseUp)
+                }
+                document.addEventListener('mousemove', handleMouseMove)
+                document.addEventListener('mouseup', handleMouseUp)
+              }}
+              onTouchStart={(e) => {
+                const touch = e.touches[0]
+                const startY = touch.clientY
+                const handleTouchMove = (e: TouchEvent) => {
+                  const currentY = e.touches[0].clientY
+                  const deltaY = startY - currentY
+                  if (deltaY > 50) {
+                    setShowTripDetails(true)
+                    document.removeEventListener('touchmove', handleTouchMove)
+                    document.removeEventListener('touchend', handleTouchEnd)
+                  }
+                }
+                const handleTouchEnd = () => {
+                  document.removeEventListener('touchmove', handleTouchMove)
+                  document.removeEventListener('touchend', handleTouchEnd)
+                }
+                document.addEventListener('touchmove', handleTouchMove)
+                document.addEventListener('touchend', handleTouchEnd)
+              }}
+            />
+          )}
           {isLoadingVisa && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-50">
               <Card className="p-6 max-w-md">
@@ -801,9 +863,9 @@ Plan your own visa-free routes at Visa Planner!`
                   top: `${getTooltipPosition(mousePosition).y}px`,
                 }}
               >
-                <Card className="px-4 py-2 bg-card/95 backdrop-blur-sm border-primary/20 shadow-lg">
-                  <p className="text-sm font-medium">{hoveredCountry}</p>
-                  <p className="text-xs text-muted-foreground capitalize">
+                <Card className={`px-3 py-2 bg-card/95 backdrop-blur-sm border-primary/20 shadow-lg ${isMobile ? 'text-xs' : 'px-4'}`}>
+                  <p className={`font-medium ${isMobile ? 'text-xs' : 'text-sm'}`}>{hoveredCountry}</p>
+                  <p className={`text-muted-foreground capitalize ${isMobile ? 'text-[10px]' : 'text-xs'}`}>
                     {(() => {
                       const geo = allGeographies.find((g) => g.properties.name === hoveredCountry)
                       const isoCode = geo ? getISOFromGeographyId(geo.id) : null
@@ -820,64 +882,75 @@ Plan your own visa-free routes at Visa Planner!`
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="absolute bottom-4 left-4"
+              className={`absolute ${isMobile ? 'top-2 left-2' : 'top-4 left-4'}`}
             >
-              <Card className="p-3 bg-card/95 backdrop-blur-sm max-w-[280px]">
-                <h3 className="text-xs font-semibold mb-2">Visa Requirements</h3>
+              <Card className={`p-3 bg-card/95 backdrop-blur-sm ${isMobile ? 'max-w-[240px]' : 'max-w-[280px]'}`}>
+                <h3 className={`font-semibold mb-2 ${isMobile ? 'text-xs' : 'text-xs'}`}>Visa Requirements</h3>
                 <div className="grid grid-cols-1 gap-1.5 text-xs">
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "oklch(0.65 0.18 140)" }} />
-                    <span>Visa-Free</span>
+                    <span className={isMobile ? 'text-[10px]' : 'text-xs'}>Visa-Free</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "oklch(0.70 0.20 60)" }} />
-                    <span>Visa on Arrival</span>
+                    <span className={isMobile ? 'text-[10px]' : 'text-xs'}>Visa on Arrival</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "oklch(0.60 0.18 280)" }} />
-                    <span>eVisa</span>
+                    <span className={isMobile ? 'text-[10px]' : 'text-xs'}>eVisa</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "oklch(0.55 0.22 25)" }} />
-                    <span>Visa Required</span>
+                    <span className={isMobile ? 'text-[10px]' : 'text-xs'}>Visa Required</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "oklch(0.35 0.15 0)" }} />
-                    <span>No Admission</span>
+                    <span className={isMobile ? 'text-[10px]' : 'text-xs'}>No Admission</span>
                   </div>
                 </div>
               </Card>
             </motion.div>
           )}
 
-          {!isRoutePlanned && route.length > 0 && (
+
+          {/* Mobile Trip Details Hint - only in plan mode */}
+          {isMobile && route.length > 0 && isRoutePlanned && !showTripDetails && (
             <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="absolute bottom-4 right-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-40"
             >
-              <Card className="p-3 bg-card/95 backdrop-blur-sm">
-                <p className="text-xs text-muted-foreground mb-2 font-semibold">Keyboard Shortcuts</p>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">⌘Z</kbd>
-                    <span>Undo</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Enter</kbd>
-                    <span>Plan route</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px]">Esc</kbd>
-                    <span>Cancel</span>
-                  </div>
+              <Card 
+                className="px-4 py-3 bg-card/95 backdrop-blur-sm border-primary/20 shadow-lg cursor-pointer hover:bg-card/90 transition-colors"
+                onClick={() => setShowTripDetails(true)}
+              >
+                <div className="flex items-center gap-2 text-center">
+                  <span className="text-sm font-medium">View Trip Details</span>
+                  <motion.div
+                    animate={{ y: [0, -2, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    <svg 
+                      className="w-4 h-4 text-primary" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2} 
+                        d="M5 15l7-7 7 7" 
+                      />
+                    </svg>
+                  </motion.div>
                 </div>
               </Card>
             </motion.div>
           )}
         </div>
 
-        {route.length > 0 && (
+        {route.length > 0 && !isMobile && (
           <TripDetails
             route={route}
             nationality={nationality}
@@ -887,21 +960,41 @@ Plan your own visa-free routes at Visa Planner!`
             isPlanned={isRoutePlanned}
             visaRequirements={visaRequirements}
             allGeographies={allGeographies}
+            isMobile={isMobile}
+            showTripDetails={showTripDetails}
+            onCloseTripDetails={() => setShowTripDetails(false)}
+          />
+        )}
+
+        {/* Mobile TripDetails - rendered separately for mobile */}
+        {route.length > 0 && isMobile && (
+          <TripDetails
+            route={route}
+            nationality={nationality}
+            onRemove={removeCountry}
+            onMove={moveCountry}
+            onUpdate={updateCountry}
+            isPlanned={isRoutePlanned}
+            visaRequirements={visaRequirements}
+            allGeographies={allGeographies}
+            isMobile={isMobile}
+            showTripDetails={showTripDetails}
+            onCloseTripDetails={() => setShowTripDetails(false)}
           />
         )}
       </div>
 
       <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[95vw] sm:max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle>Reset your trip?</AlertDialogTitle>
             <AlertDialogDescription>
               This will clear all selected countries and start over. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleReset}>Reset Trip</AlertDialogAction>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReset} className="w-full sm:w-auto">Reset Trip</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

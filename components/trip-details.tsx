@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -54,6 +54,9 @@ interface TripDetailsProps {
   isPlanned: boolean
   visaRequirements: Record<string, ProcessedVisaRequirement>
   allGeographies: any[]
+  isMobile?: boolean
+  showTripDetails?: boolean
+  onCloseTripDetails?: () => void
 }
 
 // Sortable Country Item Component
@@ -284,7 +287,7 @@ function CountryItem({
                       </div>
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-80 select-none" side="left">
+                  <PopoverContent className="w-[90vw] sm:w-80 select-none" side="left">
                     <div className="space-y-3">
                       <div>
                         <h4 className="font-semibold mb-1">{country.name}</h4>
@@ -335,7 +338,7 @@ function CountryItem({
                     {country.dates || country.notes ? "Edit" : "Add"} details
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="max-w-[95vw] sm:max-w-md">
                   <DialogHeader>
                     <DialogTitle>Edit {country.name}</DialogTitle>
                   </DialogHeader>
@@ -392,7 +395,19 @@ function CountryItem({
   )
 }
 
-export function TripDetails({ route, nationality, onRemove, onMove, onUpdate, isPlanned, visaRequirements, allGeographies }: TripDetailsProps) {
+export function TripDetails({ 
+  route, 
+  nationality, 
+  onRemove, 
+  onMove, 
+  onUpdate, 
+  isPlanned, 
+  visaRequirements, 
+  allGeographies,
+  isMobile = false,
+  showTripDetails = true,
+  onCloseTripDetails
+}: TripDetailsProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -418,6 +433,123 @@ export function TripDetails({ route, nationality, onRemove, onMove, onUpdate, is
     const visaReq = isoCode ? getVisaRequirementForCountry(isoCode, nationality, visaRequirements) : null
     return visaReq?.requirement === "visa-free"
   }).length
+
+  if (isMobile) {
+    return (
+      <AnimatePresence>
+        {showTripDetails && (
+          <motion.div
+            initial={{ y: "100%", opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0 }}
+            transition={{ type: "spring", damping: 25 }}
+            className="fixed inset-x-0 top-16 bottom-0 z-50 bg-card/95 backdrop-blur-sm flex flex-col"
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.2 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 100) {
+                onCloseTripDetails?.()
+              }
+            }}
+          >
+            {/* Drag handle indicator */}
+            <div className="flex justify-center pt-2 pb-1">
+              <motion.div 
+                className="w-12 h-1 bg-muted-foreground/30 rounded-full"
+                animate={{ opacity: [0.3, 0.6, 0.3] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+            </div>
+
+            {/* Mobile header */}
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <div>
+                <h2 className="text-lg font-bold">Your Trip</h2>
+                <p className="text-xs text-muted-foreground">Swipe down to close</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onCloseTripDetails}
+                className="h-8 w-8"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            {/* Mobile content */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="p-4 pb-4">
+                <p className="text-sm text-muted-foreground mb-4">
+                  {route.length} {route.length === 1 ? "country" : "countries"} in your route
+                </p>
+                {route.length > 1 && (
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Drag countries to reorder your trip
+                  </p>
+                )}
+
+                {isPlanned && (
+                  <Card className="p-4 bg-card border-border/50 mb-4">
+                    <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                      <Plane className="w-4 h-4" />
+                      Trip Statistics
+                    </h3>
+                    <div className="space-y-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground flex items-center gap-2">
+                          <MapPin className="w-3.5 h-3.5" />
+                          Total distance
+                        </span>
+                        <span className="font-semibold">{totalDistance.toLocaleString()} km</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground flex items-center gap-2">
+                          <Flag className="w-3.5 h-3.5" />
+                          Visa-free
+                        </span>
+                        <span className="font-semibold text-[oklch(0.65_0.18_140)]">
+                          {visaFreeCount} / {route.length}
+                        </span>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+              </div>
+
+              <div className="px-4 pb-4">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={route.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-3">
+                      {route.map((country, index) => (
+                        <SortableCountryItem
+                          key={country.id}
+                          country={country}
+                          index={index}
+                          route={route}
+                          nationality={nationality}
+                          onRemove={onRemove}
+                          onUpdate={onUpdate}
+                          isPlanned={isPlanned}
+                          visaRequirements={visaRequirements}
+                          allGeographies={allGeographies}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    )
+  }
 
   return (
     <motion.div
