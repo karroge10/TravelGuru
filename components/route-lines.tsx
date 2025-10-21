@@ -8,7 +8,7 @@ interface RouteLinesProps {
   route: Country[]
 }
 
-// Component to render markers with zoom-based scaling
+// Component to render markers with zoom-based scaling and smooth transitions
 function MarkerWithZoom({ country, index, isStart, isEnd, isWaypoint, route }: {
   country: Country
   index: number
@@ -20,113 +20,75 @@ function MarkerWithZoom({ country, index, isStart, isEnd, isWaypoint, route }: {
   const { k: zoom } = useZoomPanContext()
   
   // Calculate dynamic marker size based on zoom level
-  // Base radius of 6-8, scaled inversely with zoom (smaller when zoomed in)
   const baseRadius = isStart ? 6 : isEnd ? 8 : 8
   const radius = Math.max(3, Math.min(12, baseRadius / zoom))
-  
-  // Calculate dynamic stroke width
   const strokeWidth = Math.max(1, Math.min(3, 2 / zoom))
-  
-  // Calculate dynamic font size for waypoint numbers - proportional to marker size
   const fontSize = Math.max(4, Math.min(16, radius * 0.8))
 
+  // Determine marker type and properties
+  const markerType = isStart ? 'start' : isEnd ? 'end' : 'waypoint'
+  const fillColor = isStart ? 'oklch(0.75 0.15 180)' : isEnd ? 'oklch(0.65 0.18 140)' : 'oklch(0.70 0.20 60)'
+  const shadowColor = isStart ? 'oklch(0.75 0.15 180 / 0.6)' : isEnd ? 'oklch(0.65 0.18 140 / 0.8)' : 'oklch(0.70 0.20 60 / 0.8)'
+
   return (
-    <>
-      {isStart && (
-        // Start marker - Flag/Pin style
-        <g style={{ userSelect: "none", WebkitUserSelect: "none", MozUserSelect: "none", msUserSelect: "none" }}>
-          <motion.circle
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            r={radius}
-            fill="oklch(0.75 0.15 180)"
-            stroke="oklch(0.12 0.01 240)"
-            strokeWidth={strokeWidth}
-            style={{
-              filter: "drop-shadow(0 0 8px oklch(0.75 0.15 180 / 0.8))",
-            }}
-          />
-          <motion.path
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-            d={`M 0,-${radius} L 0,-${radius * 2.5} L ${radius * 1.3},-${radius * 2.2} L 0,-${radius * 1.7} Z`}
-            fill="oklch(0.75 0.15 180)"
-            stroke="oklch(0.12 0.01 240)"
-            strokeWidth={strokeWidth * 0.5}
-            style={{
-              filter: "drop-shadow(0 0 4px oklch(0.75 0.15 180 / 0.6))",
-            }}
-          />
-        </g>
+    <g style={{ userSelect: "none", WebkitUserSelect: "none", MozUserSelect: "none", msUserSelect: "none" }}>
+      {/* Main circle - always present */}
+      <motion.circle
+        key={`circle-${country.id}-${markerType}`} // Key changes when marker type changes
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ duration: 0.2 }}
+        r={radius}
+        fill={fillColor}
+        stroke="oklch(0.12 0.01 240)"
+        strokeWidth={strokeWidth}
+        style={{
+          filter: `drop-shadow(0 0 4px ${shadowColor})`,
+        }}
+      />
+      
+      {/* Flag pole - only for start and end markers */}
+      {(isStart || isEnd) && (
+        <motion.path
+          key={`flag-${country.id}-${markerType}`} // Key changes when marker type changes
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.2 }}
+          d={`M 0,-${radius} L 0,-${radius * 2.5} L ${radius * 1.3},-${radius * 2.2} L 0,-${radius * 1.7} Z`}
+          fill={fillColor}
+          stroke="oklch(0.12 0.01 240)"
+          strokeWidth={strokeWidth * 0.5}
+          style={{
+            filter: `drop-shadow(0 0 2px ${shadowColor})`,
+          }}
+        />
       )}
-
+      
+      {/* Number - only for waypoint markers */}
       {isWaypoint && (
-        // Waypoint marker - Numbered circle
-        <g style={{ userSelect: "none", WebkitUserSelect: "none", MozUserSelect: "none", msUserSelect: "none" }}>
-          <motion.circle
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: index * 0.3 + 0.2, type: "spring", stiffness: 200 }}
-            r={radius}
-            fill="oklch(0.70 0.20 60)"
-            stroke="oklch(0.12 0.01 240)"
-            strokeWidth={strokeWidth}
-            style={{
-              filter: "drop-shadow(0 0 8px oklch(0.70 0.20 60 / 0.8))",
-            }}
-          />
-          <text
-            textAnchor="middle"
-            y={fontSize * 0.3}
-            x={0}
-            style={{
-              fontSize: `${fontSize}px`,
-              fill: "oklch(0.12 0.01 240)",
-              fontWeight: "bold",
-              pointerEvents: "none",
-              userSelect: "none",
-              WebkitUserSelect: "none",
-              MozUserSelect: "none",
-              msUserSelect: "none",
-            }}
-          >
-            {index}
-          </text>
-        </g>
+        <motion.text
+          key={`text-${country.id}-${markerType}`} // Key changes when marker type changes
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+          textAnchor="middle"
+          y={fontSize * 0.3}
+          x={0}
+          style={{
+            fontSize: `${fontSize}px`,
+            fill: "oklch(0.12 0.01 240)",
+            fontWeight: "bold",
+            pointerEvents: "none",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            MozUserSelect: "none",
+            msUserSelect: "none",
+          }}
+        >
+          {index}
+        </motion.text>
       )}
-
-      {isEnd && (
-        // Destination marker - Green Flag/Pin style
-        <g style={{ userSelect: "none", WebkitUserSelect: "none", MozUserSelect: "none", msUserSelect: "none" }}>
-          <motion.circle
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: (route.length - 1) * 0.3 + 0.2, type: "spring", stiffness: 200 }}
-            r={radius}
-            fill="oklch(0.65 0.18 140)"
-            stroke="oklch(0.12 0.01 240)"
-            strokeWidth={strokeWidth}
-            style={{
-              filter: "drop-shadow(0 0 8px oklch(0.65 0.18 140 / 0.8))",
-            }}
-          />
-          <motion.path
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: (route.length - 1) * 0.3 + 0.3, type: "spring", stiffness: 200 }}
-            d={`M 0,-${radius} L 0,-${radius * 2.5} L ${radius * 1.3},-${radius * 2.2} L 0,-${radius * 1.7} Z`}
-            fill="oklch(0.65 0.18 140)"
-            stroke="oklch(0.12 0.01 240)"
-            strokeWidth={strokeWidth * 0.5}
-            style={{
-              filter: "drop-shadow(0 0 4px oklch(0.65 0.18 140 / 0.6))",
-            }}
-          />
-        </g>
-      )}
-    </>
+    </g>
   )
 }
 
@@ -175,15 +137,9 @@ function CurvedLine({ from, to, index }: { from: [number, number], to: [number, 
 
   return (
     <motion.path
-      initial={{ strokeDashoffset: 1000, opacity: 0 }}
-      animate={{ 
-        strokeDashoffset: 0, 
-        opacity: 1
-      }}
-      transition={{ 
-        strokeDashoffset: { duration: 2, ease: "easeInOut", delay: index * 0.5 },
-        opacity: { duration: 1, delay: index * 0.5 }
-      }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }} // All lines appear at once
       d={path}
       fill="none"
       stroke="white"
@@ -191,7 +147,7 @@ function CurvedLine({ from, to, index }: { from: [number, number], to: [number, 
       strokeLinecap="round"
       strokeDasharray={`${dashLength} ${gapLength}`}
       style={{
-        filter: "drop-shadow(0 4px 12px rgba(255, 255, 255, 0.4)) drop-shadow(0 2px 4px rgba(255, 255, 255, 0.2))",
+        filter: "drop-shadow(0 2px 6px rgba(255, 255, 255, 0.3))", // Simplified shadow
       }}
     />
   )

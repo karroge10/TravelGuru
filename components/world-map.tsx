@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps"
 import { Card } from "@/components/ui/card"
@@ -63,6 +63,7 @@ function GeographiesWrapper({
   isRoutePlanned: boolean
 }) {
   const hasLoadedRef = React.useRef(false)
+  const throttledMouseMove = React.useRef<NodeJS.Timeout | null>(null)
 
   return (
     <Geographies geography={geoUrl}>
@@ -92,7 +93,13 @@ function GeographiesWrapper({
                   setMousePosition(null)
                 }}
                 onMouseMove={(e: React.MouseEvent) => {
-                  setMousePosition({ x: e.clientX, y: e.clientY })
+                  // Throttled mouse move for better performance
+                  if (throttledMouseMove.current) return
+                  
+                  throttledMouseMove.current = setTimeout(() => {
+                    setMousePosition({ x: e.clientX, y: e.clientY })
+                    throttledMouseMove.current = null
+                  }, 32) // ~30fps - more responsive than before but still throttled
                 }}
                 onTouchStart={(e: React.TouchEvent) => {
                   const touch = e.touches[0]
@@ -106,28 +113,28 @@ function GeographiesWrapper({
                     setMousePosition(null)
                   }, 1000)
                 }}
-                style={{
-                  default: {
-                    fill: getCountryColor(geo),
-                    stroke: "#374151",
-                    strokeWidth: 0.3,
-                    outline: "none",
-                    transition: "all 0.2s ease-in-out",
-                  },
-                  hover: {
-                    fill: isRoutePlanned ? getCountryColor(geo) : "oklch(0.75 0.15 180)",
-                    stroke: "#374151",
-                    strokeWidth: 0.3,
-                    outline: "none",
-                    cursor: isRoutePlanned ? "default" : "pointer",
-                  },
-                  pressed: {
-                    fill: isRoutePlanned ? getCountryColor(geo) : "oklch(0.75 0.15 180)",
-                    stroke: "#374151",
-                    strokeWidth: 0.3,
-                    outline: "none",
-                  },
-                }}
+      style={{
+        default: {
+          fill: getCountryColor(geo),
+          stroke: "#374151",
+          strokeWidth: 0.3,
+          outline: "none",
+          // Removed transition for better performance
+        },
+        hover: {
+          fill: isRoutePlanned ? getCountryColor(geo) : "oklch(0.75 0.15 180)", // Restored hover color
+          stroke: "#374151",
+          strokeWidth: 0.3,
+          outline: "none",
+          cursor: isRoutePlanned ? "default" : "pointer",
+        },
+        pressed: {
+          fill: isRoutePlanned ? getCountryColor(geo) : "oklch(0.75 0.15 180)", // Match hover state
+          stroke: "#374151",
+          strokeWidth: 0.3,
+          outline: "none",
+        },
+      }}
               />
             ))}
           </>
@@ -306,25 +313,32 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
   }
 
   const getCentroid = (geo: any): [number, number] => {
-    const bounds = geo.geometry.coordinates[0]
-    if (!bounds || bounds.length === 0) return [0, 0]
+    // Handle different geometry types (Polygon vs MultiPolygon)
+    let coordinates = geo.geometry.coordinates
+    
+    // For MultiPolygon, use the largest polygon (usually the mainland)
+    if (geo.geometry.type === 'MultiPolygon') {
+      // Find the polygon with the most coordinates (likely the mainland)
+      coordinates = coordinates.reduce((largest: any, current: any) => {
+        return current[0].length > largest[0].length ? current : largest
+      })
+    }
+    
+    // Extract the outer ring coordinates
+    const outerRing = coordinates[0]
+    if (!outerRing || outerRing.length === 0) return [0, 0]
 
     let sumLon = 0
     let sumLat = 0
     let count = 0
 
-    const processCoords = (coords: any) => {
-      if (Array.isArray(coords[0])) {
-        coords.forEach(processCoords)
-      } else {
-        sumLon += coords[0]
-        sumLat += coords[1]
+    // Process only the outer ring coordinates
+    outerRing.forEach((coord: any) => {
+      if (Array.isArray(coord) && coord.length >= 2) {
+        sumLon += coord[0]
+        sumLat += coord[1]
         count++
       }
-    }
-
-    geo.geometry.coordinates.forEach((polygon: any) => {
-      processCoords(polygon)
     })
 
     return count > 0 ? [sumLon / count, sumLat / count] : [0, 0]
@@ -407,6 +421,15 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
     // Default state - no colors shown
     return "#1a1f2e"
   }
+
+  // Memoize tooltip content calculation for better performance
+  const tooltipContent = useMemo(() => {
+    if (!hoveredCountry) return "Unknown"
+    const geo = allGeographies.find((g) => g.properties.name === hoveredCountry)
+    const isoCode = geo ? getISOFromGeographyId(geo.id) : null
+    const visaReq = isoCode ? getVisaRequirementForCountry(isoCode, nationality!, visaRequirements) : null
+    return visaReq?.requirement?.replace("-", " ") || "Unknown"
+  }, [hoveredCountry, allGeographies, nationality, visaRequirements])
 
   const handlePlanRoute = () => {
     setIsRoutePlanned(true)
@@ -757,50 +780,6 @@ Plan your own visa-free routes at Visa Planner!`
       <div className="flex-1 flex flex-col lg:flex-row min-h-0 relative">
         {/* Map */}
         <div className={`flex-1 relative bg-background overflow-hidden ${isMobile && showTripDetails ? 'hidden' : ''}`}>
-          {/* Mobile swipe-up area for trip details */}
-          {isMobile && isRoutePlanned && route.length > 0 && (
-            <div 
-              className="absolute bottom-0 left-0 right-0 h-20 z-30 cursor-pointer"
-              onClick={() => setShowTripDetails(true)}
-              onMouseDown={(e) => {
-                const startY = e.clientY
-                const handleMouseMove = (e: MouseEvent) => {
-                  const currentY = e.clientY
-                  const deltaY = startY - currentY
-                  if (deltaY > 50) {
-                    setShowTripDetails(true)
-                    document.removeEventListener('mousemove', handleMouseMove)
-                    document.removeEventListener('mouseup', handleMouseUp)
-                  }
-                }
-                const handleMouseUp = () => {
-                  document.removeEventListener('mousemove', handleMouseMove)
-                  document.removeEventListener('mouseup', handleMouseUp)
-                }
-                document.addEventListener('mousemove', handleMouseMove)
-                document.addEventListener('mouseup', handleMouseUp)
-              }}
-              onTouchStart={(e) => {
-                const touch = e.touches[0]
-                const startY = touch.clientY
-                const handleTouchMove = (e: TouchEvent) => {
-                  const currentY = e.touches[0].clientY
-                  const deltaY = startY - currentY
-                  if (deltaY > 50) {
-                    setShowTripDetails(true)
-                    document.removeEventListener('touchmove', handleTouchMove)
-                    document.removeEventListener('touchend', handleTouchEnd)
-                  }
-                }
-                const handleTouchEnd = () => {
-                  document.removeEventListener('touchmove', handleTouchMove)
-                  document.removeEventListener('touchend', handleTouchEnd)
-                }
-                document.addEventListener('touchmove', handleTouchMove)
-                document.addEventListener('touchend', handleTouchEnd)
-              }}
-            />
-          )}
           {isLoadingVisa && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-50">
               <Card className="p-6 max-w-md">
@@ -866,12 +845,7 @@ Plan your own visa-free routes at Visa Planner!`
                 <Card className={`px-3 py-2 bg-card/95 backdrop-blur-sm border-primary/20 shadow-lg ${isMobile ? 'text-xs' : 'px-4'}`}>
                   <p className={`font-medium ${isMobile ? 'text-xs' : 'text-sm'}`}>{hoveredCountry}</p>
                   <p className={`text-muted-foreground capitalize ${isMobile ? 'text-[10px]' : 'text-xs'}`}>
-                    {(() => {
-                      const geo = allGeographies.find((g) => g.properties.name === hoveredCountry)
-                      const isoCode = geo ? getISOFromGeographyId(geo.id) : null
-                      const visaReq = isoCode ? getVisaRequirementForCountry(isoCode, nationality!, visaRequirements) : null
-                      return visaReq?.requirement?.replace("-", " ") || "Unknown"
-                    })()}
+                    {tooltipContent}
                   </p>
                 </Card>
               </motion.div>

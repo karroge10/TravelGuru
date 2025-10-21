@@ -212,8 +212,9 @@ function CountryItem({
             <div 
               {...dragAttributes} 
               {...dragListeners}
-              className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded transition-colors"
+              className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded transition-colors touch-manipulation"
               title="Drag to reorder"
+              style={{ touchAction: 'none' }}
             >
               <GripVertical className="w-4 h-4 text-muted-foreground" />
             </div>
@@ -409,7 +410,13 @@ export function TripDetails({
   onCloseTripDetails
 }: TripDetailsProps) {
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Require 8px of movement before drag starts
+        delay: 100, // 100ms delay before drag starts
+        tolerance: 5, // 5px tolerance for movement
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -444,29 +451,11 @@ export function TripDetails({
             exit={{ y: "100%", opacity: 0 }}
             transition={{ type: "spring", damping: 25 }}
             className="fixed inset-x-0 top-16 bottom-0 z-50 bg-card/95 backdrop-blur-sm flex flex-col"
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.2 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.y > 100) {
-                onCloseTripDetails?.()
-              }
-            }}
           >
-            {/* Drag handle indicator */}
-            <div className="flex justify-center pt-2 pb-1">
-              <motion.div 
-                className="w-12 h-1 bg-muted-foreground/30 rounded-full"
-                animate={{ opacity: [0.3, 0.6, 0.3] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              />
-            </div>
-
             {/* Mobile header */}
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div>
-                <h2 className="text-lg font-bold">Your Trip</h2>
-                <p className="text-xs text-muted-foreground">Swipe down to close</p>
+                <h2 className="text-lg font-bold">Your Trip Details</h2>
               </div>
               <Button
                 variant="ghost"
