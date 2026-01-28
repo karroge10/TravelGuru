@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { calculateTotalDistance, type Country } from "@/lib/visa-data"
 import { ProcessedVisaRequirement } from "@/lib/visa-api"
-import { getISOFromGeographyId, getCountryNameFromCode } from "@/lib/country-mapping"
-import { getVisaRequirementForCountry } from "@/lib/visa-service"
+import { getISOFromGeographyId, getCountryNameFromCode, getFlagEmoji } from "@/lib/country-mapping"
+import { FlagImage } from "@/components/flag-image"
+import { getVisaRequirementForCountry, type CombinedVisaRequirement } from "@/lib/visa-service"
 import {
   X,
   Clock,
@@ -48,11 +49,12 @@ import { CSS } from "@dnd-kit/utilities"
 interface TripDetailsProps {
   route: Country[]
   nationality: string
+  secondaryNationality?: string | null
   onRemove: (index: number) => void
   onMove: (fromIndex: number, toIndex: number) => void
   onUpdate: (index: number, updates: Partial<Country>) => void
   isPlanned: boolean
-  visaRequirements: Record<string, ProcessedVisaRequirement>
+  visaRequirements: Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>
   allGeographies: any[]
   isMobile?: boolean
   showTripDetails?: boolean
@@ -65,6 +67,7 @@ function SortableCountryItem({
   index, 
   route, 
   nationality, 
+  secondaryNationality,
   onRemove, 
   onUpdate, 
   isPlanned, 
@@ -75,10 +78,11 @@ function SortableCountryItem({
   index: number
   route: Country[]
   nationality: string
+  secondaryNationality?: string | null
   onRemove: (index: number) => void
   onUpdate: (index: number, updates: Partial<Country>) => void
   isPlanned: boolean
-  visaRequirements: Record<string, ProcessedVisaRequirement>
+  visaRequirements: Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>
   allGeographies: any[]
 }) {
   const {
@@ -102,6 +106,7 @@ function SortableCountryItem({
         index={index}
         route={route}
         nationality={nationality}
+        secondaryNationality={secondaryNationality}
         onRemove={onRemove}
         onUpdate={onUpdate}
         isPlanned={isPlanned}
@@ -121,6 +126,7 @@ function CountryItem({
   index, 
   route, 
   nationality, 
+  secondaryNationality,
   onRemove, 
   onUpdate, 
   isPlanned, 
@@ -134,10 +140,11 @@ function CountryItem({
   index: number
   route: Country[]
   nationality: string
+  secondaryNationality?: string | null
   onRemove: (index: number) => void
   onUpdate: (index: number, updates: Partial<Country>) => void
   isPlanned: boolean
-  visaRequirements: Record<string, ProcessedVisaRequirement>
+  visaRequirements: Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>
   allGeographies: any[]
   dragAttributes?: any
   dragListeners?: any
@@ -150,8 +157,11 @@ function CountryItem({
   // Get visa requirement using the new service
   const geo = allGeographies.find((g) => g.properties.name === country.name)
   const isoCode = geo ? getISOFromGeographyId(geo.id) : null
-  const visaReq = isoCode ? getVisaRequirementForCountry(isoCode, nationality, visaRequirements) : null
+  const visaReq = isoCode ? visaRequirements[isoCode] : null
   
+  // Check if this is a combined visa requirement (has bestPassport field)
+  const isCombined = visaReq && 'bestPassport' in visaReq
+  const combinedReq = isCombined ? visaReq as CombinedVisaRequirement : null
   
   // Normalize the requirement type
   const requirementType = visaReq?.requirement || 'unknown'
@@ -285,6 +295,22 @@ function CountryItem({
                         className={`inline-flex items-center gap-2 px-2 py-1 rounded text-xs font-medium ${getVisaColor(requirementType)} text-background`}
                       >
                         {getVisaLabel(requirementType)}
+                        {isCombined && secondaryNationality && combinedReq && (
+                          <span className="ml-1 text-xs inline-flex items-center gap-1">
+                            {combinedReq.bestPassport === 'primary' && nationality && (
+                              <FlagImage isoCode={nationality} size={16} className="mr-2 inline-block" />
+                            )}
+                            {combinedReq.bestPassport === 'secondary' && secondaryNationality && (
+                              <FlagImage isoCode={secondaryNationality} size={16} className="mr-2 inline-block" />
+                            )}
+                            {combinedReq.bestPassport === 'both' && nationality && secondaryNationality && (
+                              <>
+                                <FlagImage isoCode={nationality} size={16} className="mr-2 inline-block" />
+                                <FlagImage isoCode={secondaryNationality} size={16} className="mr-2 inline-block" />
+                              </>
+                            )}
+                          </span>
+                        )}
                       </div>
                     </button>
                   </PopoverTrigger>
@@ -292,8 +318,16 @@ function CountryItem({
                     <div className="space-y-3">
                       <div>
                         <h4 className="font-semibold mb-1">{country.name}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Visa requirements for {getCountryNameFromCode(nationality)} citizens
+                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                          {isCombined && secondaryNationality ? (
+                            <>
+                              Visa requirements for <FlagImage isoCode={nationality} size={16} className="inline-block" /> {getCountryNameFromCode(nationality)} and <FlagImage isoCode={secondaryNationality} size={16} className="inline-block" /> {getCountryNameFromCode(secondaryNationality)} citizens
+                            </>
+                          ) : (
+                            <>
+                              Visa requirements for <FlagImage isoCode={nationality} size={16} className="inline-block" /> {getCountryNameFromCode(nationality)} citizens
+                            </>
+                          )}
                         </p>
                       </div>
 
@@ -305,6 +339,32 @@ function CountryItem({
                             <p className="text-sm text-muted-foreground">{getVisaLabel(requirementType)}</p>
                           </div>
                         </div>
+
+                        {isCombined && secondaryNationality && combinedReq && (
+                          <div className="flex items-start gap-2">
+                            <Flag className="w-4 h-4 text-muted-foreground mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium">Best Passport</p>
+                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                {combinedReq.bestPassport === 'primary' && (
+                                  <>
+                                    <FlagImage isoCode={nationality} size={16} className="inline-block" /> {getCountryNameFromCode(nationality)}
+                                  </>
+                                )}
+                                {combinedReq.bestPassport === 'secondary' && (
+                                  <>
+                                    <FlagImage isoCode={secondaryNationality} size={16} className="inline-block" /> {getCountryNameFromCode(secondaryNationality)}
+                                  </>
+                                )}
+                                {combinedReq.bestPassport === 'both' && (
+                                  <>
+                                    <FlagImage isoCode={nationality} size={16} className="inline-block" /> or <FlagImage isoCode={secondaryNationality} size={16} className="inline-block" /> (either works)
+                                  </>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        )}
 
                         {visaReq?.duration && (
                           <div className="flex items-start gap-2">
@@ -399,6 +459,7 @@ function CountryItem({
 export function TripDetails({ 
   route, 
   nationality, 
+  secondaryNationality,
   onRemove, 
   onMove, 
   onUpdate, 
@@ -437,7 +498,12 @@ export function TripDetails({
   const visaFreeCount = route.filter((c) => {
     const geo = allGeographies.find((g) => g.properties.name === c.name)
     const isoCode = geo ? getISOFromGeographyId(geo.id) : null
-    const visaReq = isoCode ? getVisaRequirementForCountry(isoCode, nationality, visaRequirements) : null
+    if (!isoCode) return false
+    // Check if it's own country
+    if (isoCode === nationality || isoCode === secondaryNationality) {
+      return true
+    }
+    const visaReq = isoCode ? visaRequirements[isoCode] : null
     return visaReq?.requirement === "visa-free"
   }).length
 
@@ -522,6 +588,7 @@ export function TripDetails({
                           index={index}
                           route={route}
                           nationality={nationality}
+                          secondaryNationality={secondaryNationality}
                           onRemove={onRemove}
                           onUpdate={onUpdate}
                           isPlanned={isPlanned}
@@ -603,6 +670,7 @@ export function TripDetails({
                   index={index}
                   route={route}
                   nationality={nationality}
+                  secondaryNationality={secondaryNationality}
                   onRemove={onRemove}
                   onUpdate={onUpdate}
                   isPlanned={isPlanned}

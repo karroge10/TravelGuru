@@ -13,6 +13,20 @@ export interface VisaServiceResult {
   isLoading: boolean
 }
 
+// Visa requirement ranking (lower number = better access)
+const VISA_RANK: Record<string, number> = {
+  'visa-free': 1,
+  'visa-on-arrival': 2,
+  'e-visa': 3,
+  'visa-required': 4,
+  'no-admission': 5,
+}
+
+// Extended visa requirement with passport information
+export interface CombinedVisaRequirement extends ProcessedVisaRequirement {
+  bestPassport: 'primary' | 'secondary' | 'both'
+}
+
 // Cache for API responses
 const cache = new Map<string, { data: Record<string, ProcessedVisaRequirement>, timestamp: number }>()
 const CACHE_DURATION = 24 * 60 * 60 * 1000 // 24 hours
@@ -109,4 +123,113 @@ export function getCacheStats() {
     size: cache.size,
     keys: Array.from(cache.keys())
   }
+}
+
+/**
+ * Combines visa requirements from two passports, selecting the better option for each country
+ * @param primary Primary passport visa requirements
+ * @param secondary Secondary passport visa requirements
+ * @param primaryCode Primary passport ISO code
+ * @param secondaryCode Secondary passport ISO code
+ * @returns Combined visa requirements with best passport indicator
+ */
+export function combineVisaRequirements(
+  primary: Record<string, ProcessedVisaRequirement>,
+  secondary: Record<string, ProcessedVisaRequirement>,
+  primaryCode: string,
+  secondaryCode: string
+): Record<string, CombinedVisaRequirement> {
+  const combined: Record<string, CombinedVisaRequirement> = {}
+  
+  // Get all unique country codes from both passports
+  const allCountries = new Set([
+    ...Object.keys(primary),
+    ...Object.keys(secondary)
+  ])
+  
+  // Always include home countries (they're visa-free)
+  if (primaryCode) {
+    allCountries.add(primaryCode)
+  }
+  if (secondaryCode) {
+    allCountries.add(secondaryCode)
+  }
+  
+  for (const countryCode of allCountries) {
+    const primaryReq = primary[countryCode]
+    const secondaryReq = secondary[countryCode]
+    
+    // Check if this is a home country for either passport
+    const isPrimaryHome = countryCode === primaryCode
+    const isSecondaryHome = countryCode === secondaryCode
+    
+    // If it's a home country for either passport, it's always visa-free
+    if (isPrimaryHome || isSecondaryHome) {
+      let bestPassport: 'primary' | 'secondary' | 'both'
+      if (isPrimaryHome && isSecondaryHome) {
+        bestPassport = 'both'
+      } else if (isPrimaryHome) {
+        bestPassport = 'primary'
+      } else {
+        bestPassport = 'secondary'
+      }
+      
+      combined[countryCode] = {
+        country: primaryReq?.country || secondaryReq?.country || 'Own Country',
+        countryCode,
+        requirement: 'visa-free',
+        bestPassport,
+        notes: 'No visa required for own country'
+      }
+      continue
+    }
+    
+    // If only one passport has data, use that
+    if (!primaryReq && secondaryReq) {
+      combined[countryCode] = {
+        ...secondaryReq,
+        bestPassport: 'secondary'
+      }
+      continue
+    }
+    
+    if (primaryReq && !secondaryReq) {
+      combined[countryCode] = {
+        ...primaryReq,
+        bestPassport: 'primary'
+      }
+      continue
+    }
+    
+    // If neither has data, skip
+    if (!primaryReq && !secondaryReq) {
+      continue
+    }
+    
+    // Both have data - compare and pick the better one
+    const primaryRank = VISA_RANK[primaryReq!.requirement] || 999
+    const secondaryRank = VISA_RANK[secondaryReq!.requirement] || 999
+    
+    if (primaryRank < secondaryRank) {
+      // Primary is better
+      combined[countryCode] = {
+        ...primaryReq!,
+        bestPassport: 'primary'
+      }
+    } else if (secondaryRank < primaryRank) {
+      // Secondary is better
+      combined[countryCode] = {
+        ...secondaryReq!,
+        bestPassport: 'secondary'
+      }
+    } else {
+      // Equal rank - either passport works
+      combined[countryCode] = {
+        ...primaryReq!,
+        bestPassport: 'both'
+      }
+    }
+  }
+  
+  return combined
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from "react"
-import { Check, ChevronsUpDown, Globe } from "lucide-react"
+import { Check, ChevronsUpDown, Globe, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Command,
@@ -17,6 +17,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { FlagImage } from "@/components/flag-image"
 
 // Comprehensive list of countries with their ISO codes
 const countries = [
@@ -219,17 +220,33 @@ const countries = [
 interface NationalityDropdownProps {
   nationality: string | null
   onNationalityChange: (nationality: string) => void
+  secondaryNationality?: string | null
+  onSecondaryChange?: (nationality: string | null) => void
   className?: string
+  showSecondaryToggle?: boolean // Whether to show the + button for adding secondary passport
 }
 
-export function NationalityDropdown({ nationality, onNationalityChange, className }: NationalityDropdownProps) {
+function SingleDropdown({
+  value,
+  onValueChange,
+  label,
+  excludeCode,
+  className,
+}: {
+  value: string | null
+  onValueChange: (code: string) => void
+  label: string
+  excludeCode?: string | null
+  className?: string
+}) {
   const [open, setOpen] = useState(false)
-
-  const selectedCountry = countries.find(country => country.code === nationality)
+  const selectedCountry = countries.find(country => country.code === value)
 
   const filteredCountries = useMemo(() => {
-    return countries.sort((a, b) => a.name.localeCompare(b.name))
-  }, [])
+    return countries
+      .filter(country => country.code !== excludeCode)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [excludeCode])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -240,12 +257,14 @@ export function NationalityDropdown({ nationality, onNationalityChange, classNam
           aria-expanded={open}
           className={cn("justify-between gap-2", className)}
         >
-          <Globe className="w-4 h-4" />
-          <span className="hidden sm:inline">
-            {selectedCountry ? selectedCountry.name : "Select nationality"}
-          </span>
-          <span className="sm:hidden">
-            {selectedCountry ? selectedCountry.name : "Select"}
+          <span className="flex items-center gap-2">
+            {selectedCountry ? (
+              <FlagImage isoCode={selectedCountry.code} size={16} className="inline-block" />
+            ) : (
+              <Globe className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">{selectedCountry ? selectedCountry.name : label}</span>
+            <span className="sm:hidden">{selectedCountry ? selectedCountry.name : label}</span>
           </span>
         </Button>
       </PopoverTrigger>
@@ -260,16 +279,17 @@ export function NationalityDropdown({ nationality, onNationalityChange, classNam
                   key={country.code}
                   value={country.name}
                   onSelect={() => {
-                    onNationalityChange(country.code)
+                    onValueChange(country.code)
                     setOpen(false)
                   }}
                 >
                   <Check
                     className={cn(
                       "mr-2 h-4 w-4",
-                      nationality === country.code ? "opacity-100" : "opacity-0"
+                      value === country.code ? "opacity-100" : "opacity-0"
                     )}
                   />
+                  <FlagImage isoCode={country.code} size={16} className="mr-2 inline-block" />
                   {country.name}
                 </CommandItem>
               ))}
@@ -278,6 +298,154 @@ export function NationalityDropdown({ nationality, onNationalityChange, classNam
         </Command>
       </PopoverContent>
     </Popover>
+  )
+}
+
+export function NationalityDropdown({ 
+  nationality, 
+  onNationalityChange, 
+  secondaryNationality = null,
+  onSecondaryChange,
+  className,
+  showSecondaryToggle = true
+}: NationalityDropdownProps) {
+  const [secondaryOpen, setSecondaryOpen] = useState(false)
+  const hasSecondary = secondaryNationality !== null && secondaryNationality !== undefined
+
+  return (
+    <div className="flex items-center gap-2 justify-center">
+      <div className="flex items-center gap-1.5">
+        <SingleDropdown
+          value={nationality}
+          onValueChange={onNationalityChange}
+          label="Select nationality"
+          excludeCode={secondaryNationality}
+          className={className}
+        />
+        {!hasSecondary && onSecondaryChange && showSecondaryToggle && (
+          <Popover open={secondaryOpen} onOpenChange={setSecondaryOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className={cn("h-8 w-8 sm:h-9 sm:w-9 border-dashed", className)}
+                title="Add second passport"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[90vw] sm:w-[300px] p-0" align="center" side="bottom" sideOffset={5}>
+              <Command>
+                <CommandInput placeholder="Search countries..." />
+                <CommandList>
+                  <CommandEmpty>No country found.</CommandEmpty>
+                  <CommandGroup>
+                    {countries
+                      .filter(country => country.code !== nationality)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((country) => (
+                        <CommandItem
+                          key={country.code}
+                          value={country.name}
+                          onSelect={() => {
+                            onSecondaryChange(country.code)
+                            setSecondaryOpen(false)
+                          }}
+                        >
+                          <Check className="mr-2 h-4 w-4 opacity-0" />
+                          <FlagImage isoCode={country.code} size={16} className="mr-2 inline-block" />
+                          {country.name}
+                        </CommandItem>
+                      ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+      
+      {hasSecondary && onSecondaryChange && (
+        <div className="flex items-center gap-1.5 pl-2 border-l-2 border-primary/30">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                role="combobox"
+                className={cn("justify-between gap-2 relative pr-8", className)}
+              >
+                <span className="flex items-center gap-2 flex-1 min-w-0">
+                  {secondaryNationality ? (
+                    <>
+                      <FlagImage isoCode={secondaryNationality} size={16} className="inline-block flex-shrink-0" />
+                      <span className="hidden sm:inline truncate">
+                        {countries.find(c => c.code === secondaryNationality)?.name || "Second passport"}
+                      </span>
+                      <span className="sm:hidden truncate">
+                        {countries.find(c => c.code === secondaryNationality)?.name || "Second passport"}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Globe className="w-4 h-4 flex-shrink-0" />
+                      <span>Second passport</span>
+                    </>
+                  )}
+                </span>
+                {secondaryNationality && (
+                  <span
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-destructive/10 hover:text-destructive rounded transition-colors cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      onSecondaryChange(null)
+                    }}
+                    title="Remove second passport"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        onSecondaryChange(null)
+                      }
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[90vw] sm:w-[300px] p-0" align="center" side="bottom" sideOffset={5}>
+              <Command>
+                <CommandInput placeholder="Search countries..." />
+                <CommandList>
+                  <CommandEmpty>No country found.</CommandEmpty>
+                  <CommandGroup>
+                    {countries
+                      .filter(country => country.code !== nationality)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((country) => (
+                        <CommandItem
+                          key={country.code}
+                          value={country.name}
+                          onSelect={() => {
+                            onSecondaryChange(country.code)
+                          }}
+                        >
+                          <Check className="mr-2 h-4 w-4 opacity-0" />
+                          <FlagImage isoCode={country.code} size={16} className="mr-2 inline-block" />
+                          {country.name}
+                        </CommandItem>
+                      ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+      )}
+    </div>
   )
 }
 

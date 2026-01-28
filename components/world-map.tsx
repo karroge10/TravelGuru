@@ -10,9 +10,9 @@ import { RouteLines } from "@/components/route-lines"
 import { NationalityDropdown } from "@/components/nationality-dropdown"
 import { getAllVisaRequirements, getLastUpdatedDate, type ProcessedVisaRequirement } from "@/lib/visa-api"
 import { calculateTotalDistance, type Country } from "@/lib/visa-data"
-import { getISOFromGeographyId, getCountryNameFromCode } from "@/lib/country-mapping"
-import { getVisaRequirementsForNationality, getVisaRequirementForCountry } from "@/lib/visa-service"
-import { Flag, RotateCcw, Undo2, Globe, Filter, Share2, Save, Download } from "lucide-react"
+import { getISOFromGeographyId, getCountryNameFromCode, getFlagEmoji } from "@/lib/country-mapping"
+import { getVisaRequirementsForNationality, getVisaRequirementForCountry, combineVisaRequirements, type CombinedVisaRequirement } from "@/lib/visa-service"
+import { Flag, RotateCcw, Undo2, Globe, Filter, Share2, Save, Download, Home } from "lucide-react"
 import Image from "next/image"
 import {
   AlertDialog,
@@ -39,7 +39,9 @@ const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json"
 
 interface WorldMapProps {
   nationality: string | null
-  onNationalityChange: (nationality: string) => void
+  onNationalityChange: (nationality: string | null) => void
+  secondaryNationality?: string | null
+  onSecondaryNationalityChange?: (nationality: string | null) => void
 }
 
 type Step = "select-start" | "select-destination" | "adding-countries"
@@ -144,7 +146,7 @@ function GeographiesWrapper({
   )
 }
 
-export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
+export function WorldMap({ nationality, onNationalityChange, secondaryNationality = null, onSecondaryNationalityChange }: WorldMapProps) {
   const isMobile = useIsMobile()
   const [step, setStep] = useState<Step>("select-start")
   const [route, setRoute] = useState<Country[]>([])
@@ -158,7 +160,9 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
   const [showEVisaOnly, setShowEVisaOnly] = useState(false)
   const [showOnArrivalOnly, setShowOnArrivalOnly] = useState(false)
   const [allGeographies, setAllGeographies] = useState<any[]>([])
-  const [visaRequirements, setVisaRequirements] = useState<Record<string, ProcessedVisaRequirement>>({})
+  const [visaRequirements, setVisaRequirements] = useState<Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>>({})
+  const [primaryVisaRequirements, setPrimaryVisaRequirements] = useState<Record<string, ProcessedVisaRequirement>>({})
+  const [secondaryVisaRequirements, setSecondaryVisaRequirements] = useState<Record<string, ProcessedVisaRequirement>>({})
   const [isLoadingVisa, setIsLoadingVisa] = useState(true)
   const [showTripDetails, setShowTripDetails] = useState(false)
 
@@ -169,37 +173,95 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
     const fetchVisaData = async () => {
       setIsLoadingVisa(true)
       try {
-        const result = await getVisaRequirementsForNationality(nationality)
+        // Fetch primary passport data
+        const primaryResult = await getVisaRequirementsForNationality(nationality)
         
-        if (result.error) {
+        if (primaryResult.error) {
           toast.error("Failed to load visa requirements", {
-            description: result.error.message,
+            description: primaryResult.error.message,
           })
-          setVisaRequirements({})
-        } else if (result.data) {
-          setVisaRequirements(result.data)
+          setPrimaryVisaRequirements({})
+        } else if (primaryResult.data) {
+          setPrimaryVisaRequirements(primaryResult.data)
         } else {
-          setVisaRequirements({})
+          setPrimaryVisaRequirements({})
+        }
+        
+        // Fetch secondary passport data if provided
+        if (secondaryNationality) {
+          const secondaryResult = await getVisaRequirementsForNationality(secondaryNationality)
+          
+          if (secondaryResult.error) {
+            toast.error("Failed to load secondary passport requirements", {
+              description: secondaryResult.error.message,
+            })
+            setSecondaryVisaRequirements({})
+          } else if (secondaryResult.data) {
+            setSecondaryVisaRequirements(secondaryResult.data)
+          } else {
+            setSecondaryVisaRequirements({})
+          }
+        } else {
+          setSecondaryVisaRequirements({})
         }
         
       } catch (error) {
         toast.error("Failed to load visa requirements", {
           description: "Network error occurred. Please try again.",
         })
-        setVisaRequirements({})
+        setPrimaryVisaRequirements({})
+        setSecondaryVisaRequirements({})
       } finally {
         setIsLoadingVisa(false)
       }
     }
 
     fetchVisaData()
-  }, [nationality])
+  }, [nationality, secondaryNationality])
+  
+  // Combine visa requirements when both are available
+  useEffect(() => {
+    if (!nationality) {
+      setVisaRequirements({})
+      return
+    }
+    
+    if (secondaryNationality && Object.keys(primaryVisaRequirements).length > 0 && Object.keys(secondaryVisaRequirements).length > 0) {
+      // Combine both passports
+      const combined = combineVisaRequirements(
+        primaryVisaRequirements,
+        secondaryVisaRequirements,
+        nationality,
+        secondaryNationality
+      )
+      setVisaRequirements(combined)
+    } else if (Object.keys(primaryVisaRequirements).length > 0) {
+      // Use only primary passport - ensure home country is included
+      const requirements = { ...primaryVisaRequirements }
+      if (nationality && !requirements[nationality]) {
+        requirements[nationality] = {
+          country: 'Own Country',
+          countryCode: nationality,
+          requirement: 'visa-free',
+          notes: 'No visa required for own country'
+        }
+      }
+      setVisaRequirements(requirements)
+    } else {
+      setVisaRequirements({})
+    }
+  }, [primaryVisaRequirements, secondaryVisaRequirements, nationality, secondaryNationality])
 
   useEffect(() => {
     // Only run on client side to avoid hydration mismatch
     if (typeof window === 'undefined' || !nationality) return
     
-    const savedTrip = localStorage.getItem(`trip-${nationality}`)
+    // Create storage key that includes both nationalities if secondary is set
+    const storageKey = secondaryNationality 
+      ? `trip-${nationality}-${secondaryNationality}`
+      : `trip-${nationality}`
+    
+    const savedTrip = localStorage.getItem(storageKey)
     if (savedTrip) {
       try {
         const parsed = JSON.parse(savedTrip)
@@ -209,7 +271,7 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
             action: {
               label: "Clear",
               onClick: () => {
-                localStorage.removeItem(`trip-${nationality}`)
+                localStorage.removeItem(storageKey)
                 handleReset()
               },
             },
@@ -222,16 +284,20 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
       } catch (e) {
       }
     }
-  }, [nationality])
+  }, [nationality, secondaryNationality])
 
   useEffect(() => {
     // Only run on client side to avoid hydration mismatch
     if (typeof window === 'undefined' || !nationality) return
     
     if (route.length > 0) {
-      localStorage.setItem(`trip-${nationality}`, JSON.stringify({ route, isPlanned: isRoutePlanned }))
+      // Create storage key that includes both nationalities if secondary is set
+      const storageKey = secondaryNationality 
+        ? `trip-${nationality}-${secondaryNationality}`
+        : `trip-${nationality}`
+      localStorage.setItem(storageKey, JSON.stringify({ route, isPlanned: isRoutePlanned }))
     }
-  }, [route, isRoutePlanned, nationality])
+  }, [route, isRoutePlanned, nationality, secondaryNationality])
 
   useEffect(() => {
     // Only run on client side to avoid hydration mismatch
@@ -260,6 +326,28 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
     return () => window.removeEventListener("keydown", handleKeyPress)
   }, [route, isRoutePlanned, showResetDialog])
 
+  // Memoize tooltip content calculation for better performance
+  // Must be called before any early returns to maintain hook order
+  const tooltipContent = useMemo(() => {
+    if (!hoveredCountry) return "Unknown"
+    const geo = allGeographies.find((g) => g.properties.name === hoveredCountry)
+    const isoCode = geo ? getISOFromGeographyId(geo.id) : null
+    if (!isoCode) return "Unknown"
+    
+    // Check if it's own country (primary or secondary passport)
+    if (nationality && isoCode === nationality) {
+      return "visa free"
+    }
+    if (secondaryNationality && isoCode === secondaryNationality) {
+      return "visa free"
+    }
+    
+    const visaReq = isoCode ? visaRequirements[isoCode] : null
+    if (!visaReq) return "Unknown"
+    
+    return visaReq.requirement?.replace("-", " ") || "Unknown"
+  }, [hoveredCountry, allGeographies, nationality, secondaryNationality, visaRequirements])
+
   if (!nationality) {
     return (
       <div className="min-h-screen flex items-center sm:items-center justify-center pb-40 sm:pt-0">
@@ -276,11 +364,16 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
           </div>
           <h1 className="text-4xl font-bold mb-3">Visa Planner</h1>
           <p className="text-muted-foreground text-lg mb-8">Select your nationality to start planning your visa-free travel routes</p>
-          <NationalityDropdown 
-            nationality={nationality} 
-            onNationalityChange={onNationalityChange}
-            className="text-lg px-6 py-3"
-          />
+          <div className="flex justify-center">
+            <NationalityDropdown 
+              nationality={nationality} 
+              onNationalityChange={onNationalityChange}
+              secondaryNationality={secondaryNationality}
+              onSecondaryChange={onSecondaryNationalityChange}
+              className="text-lg px-6 py-3"
+              showSecondaryToggle={false}
+            />
+          </div>
         </div>
       </div>
     )
@@ -351,8 +444,16 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
     // Convert geography ID to ISO code for API lookup
     const isoCode = getISOFromGeographyId(countryId)
     
-    // Get visa requirement using the new service (API-only)
-    const visaReq = isoCode ? getVisaRequirementForCountry(isoCode, nationality!, visaRequirements) : null
+    // Check if it's own country (primary or secondary)
+    if (isoCode === nationality || isoCode === secondaryNationality) {
+      // Own country is always visa-free
+      if (isInRoute && isRoutePlanned) {
+        return "oklch(0.65 0.18 140)" // Green for visa-free
+      }
+    }
+    
+    // Get visa requirement from combined requirements
+    const visaReq = isoCode ? visaRequirements[isoCode] : null
 
     if (isInRoute && isRoutePlanned) {
       // Show actual visa requirement colors for countries in the planned route
@@ -422,15 +523,6 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
     return "#1a1f2e"
   }
 
-  // Memoize tooltip content calculation for better performance
-  const tooltipContent = useMemo(() => {
-    if (!hoveredCountry) return "Unknown"
-    const geo = allGeographies.find((g) => g.properties.name === hoveredCountry)
-    const isoCode = geo ? getISOFromGeographyId(geo.id) : null
-    const visaReq = isoCode ? getVisaRequirementForCountry(isoCode, nationality!, visaRequirements) : null
-    return visaReq?.requirement?.replace("-", " ") || "Unknown"
-  }, [hoveredCountry, allGeographies, nationality, visaRequirements])
-
   const handlePlanRoute = () => {
     setIsRoutePlanned(true)
     const distance = calculateTotalDistance(route)
@@ -444,8 +536,11 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
     setStep("select-start")
     setIsRoutePlanned(false)
     setShowResetDialog(false)
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(`trip-${nationality}`)
+    if (typeof window !== 'undefined' && nationality) {
+      const storageKey = secondaryNationality 
+        ? `trip-${nationality}-${secondaryNationality}`
+        : `trip-${nationality}`
+      localStorage.removeItem(storageKey)
     }
     toast.info("Trip reset")
   }
@@ -499,8 +594,11 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
       toast.error("No trip to save")
       return
     }
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`trip-${nationality}`, JSON.stringify({ route, isPlanned: isRoutePlanned }))
+    if (typeof window !== 'undefined' && nationality) {
+      const storageKey = secondaryNationality 
+        ? `trip-${nationality}-${secondaryNationality}`
+        : `trip-${nationality}`
+      localStorage.setItem(storageKey, JSON.stringify({ route, isPlanned: isRoutePlanned }))
     }
     toast.success("Trip saved!")
   }
@@ -521,14 +619,14 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
     const visaFreeCount = route.filter((c) => {
       const geo = allGeographies.find((g) => g.properties.name === c.name)
       const isoCode = geo ? getISOFromGeographyId(geo.id) : null
+      if (!isoCode) return false
       
-      let apiVisaReq = null
-      if (isoCode === nationality) {
-        apiVisaReq = { requirement: "visa-free" }
-      } else {
-        apiVisaReq = isoCode ? visaRequirements[isoCode] : null
+      // Check if it's own country (primary or secondary)
+      if (isoCode === nationality || isoCode === secondaryNationality) {
+        return true
       }
       
+      const apiVisaReq = isoCode ? visaRequirements[isoCode] : null
       const requirement = apiVisaReq?.requirement || 'unknown'
       return requirement === "visa-free"
     }).length
@@ -542,7 +640,7 @@ export function WorldMap({ nationality, onNationalityChange }: WorldMapProps) {
 • Countries: ${route.length}
 • Visa-free countries: ${visaFreeCount}/${route.length}
 
-👤 Traveler: ${getCountryNameFromCode(nationality)} passport holder
+👤 Traveler: ${getCountryNameFromCode(nationality)}${secondaryNationality ? ` and ${getCountryNameFromCode(secondaryNationality)}` : ''} passport holder${secondaryNationality ? 's' : ''}
 
 Plan your own visa-free routes at Visa Planner!`
 
@@ -581,14 +679,14 @@ Plan your own visa-free routes at Visa Planner!`
     const tripData = {
       nationality,
       route: route.map((c) => {
-        const geo = allGeographies.find((g) => g.properties.name === c.name)
-        const isoCode = geo ? getISOFromGeographyId(geo.id) : null
-        return {
-          name: c.name,
-          dates: c.dates,
-          notes: c.notes,
-          visa: isoCode ? getVisaRequirementForCountry(isoCode, nationality!, visaRequirements) : null,
-        }
+      const geo = allGeographies.find((g) => g.properties.name === c.name)
+      const isoCode = geo ? getISOFromGeographyId(geo.id) : null
+      return {
+        name: c.name,
+        dates: c.dates,
+        notes: c.notes,
+        visa: isoCode ? visaRequirements[isoCode] : null,
+      }
       }),
       totalDistance: calculateTotalDistance(route),
       totalVisaCost: calculateTotalVisaCost(route),
@@ -687,6 +785,21 @@ Plan your own visa-free routes at Visa Planner!`
               <h1 className="text-lg sm:text-2xl font-bold">Visa Planner</h1>
             </div>
             <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 sm:h-9 sm:w-9"
+                onClick={() => {
+                  onNationalityChange(null)
+                  if (onSecondaryNationalityChange) {
+                    onSecondaryNationalityChange(null)
+                  }
+                  handleReset()
+                }}
+                title="Reset and return to landing page"
+              >
+                <Home className="w-4 h-4" />
+              </Button>
               {!isRoutePlanned && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -715,6 +828,8 @@ Plan your own visa-free routes at Visa Planner!`
               <NationalityDropdown 
                 nationality={nationality} 
                 onNationalityChange={onNationalityChange}
+                secondaryNationality={secondaryNationality}
+                onSecondaryChange={onSecondaryNationalityChange}
                 className="gap-1 sm:gap-2 h-8 sm:h-9"
               />
 
@@ -928,6 +1043,7 @@ Plan your own visa-free routes at Visa Planner!`
           <TripDetails
             route={route}
             nationality={nationality}
+            secondaryNationality={secondaryNationality}
             onRemove={removeCountry}
             onMove={moveCountry}
             onUpdate={updateCountry}
@@ -945,6 +1061,7 @@ Plan your own visa-free routes at Visa Planner!`
           <TripDetails
             route={route}
             nationality={nationality}
+            secondaryNationality={secondaryNationality}
             onRemove={removeCountry}
             onMove={moveCountry}
             onUpdate={updateCountry}

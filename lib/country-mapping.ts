@@ -494,3 +494,21 @@ export function getISOFromGeographyId(geographyId: string): string | null {
 export function getGeographyIdFromISO(isoCode: string): string | null {
   return ISO_TO_GEOGRAPHY_ID[isoCode] || null
 }
+
+// Helper function to get country flag image URL from flagsapi.com
+export function getFlagEmoji(isoCode: string): string {
+  if (!isoCode || isoCode.length !== 2) {
+    return 'https://flagsapi.com/UN/flat/16.png'
+  }
+  
+  return `https://flagsapi.com/${isoCode.toUpperCase()}/flat/16.png`
+}
+
+// Helper function to get country flag image URL with custom size
+export function getFlagUrl(isoCode: string, size: number = 16): string {
+  if (!isoCode || isoCode.length !== 2) {
+    return 'https://flagsapi.com/UN/flat/16.png'
+  }
+  
+  return `https://flagsapi.com/${isoCode.toUpperCase()}/flat/${size}.png`
+}
