@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { TripDetails } from "@/components/trip-details"
 import { RouteLines } from "@/components/route-lines"
 import { NationalityDropdown } from "@/components/nationality-dropdown"
-import { getAllVisaRequirements, getLastUpdatedDate, type ProcessedVisaRequirement } from "@/lib/visa-api"
+import { type ProcessedVisaRequirement } from "@/lib/visa-api"
 import { calculateTotalDistance, type Country } from "@/lib/visa-data"
 import { getISOFromGeographyId, getCountryNameFromCode, getFlagEmoji } from "@/lib/country-mapping"
 import { getVisaRequirementsForNationality, getVisaRequirementForCountry, combineVisaRequirements, type CombinedVisaRequirement } from "@/lib/visa-service"
@@ -354,7 +354,7 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
         <div className="text-center">
           <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6 overflow-hidden">
             <Image 
-              src="/logo.jpg" 
+              src="/placeholder-logo.svg" 
               alt="Visa Planner Logo" 
               width={80} 
               height={80} 

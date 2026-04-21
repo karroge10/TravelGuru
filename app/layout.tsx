@@ -14,44 +14,64 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 })
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://visaplanner.app"
+
 export const metadata: Metadata = {
-  title: "Visa Planner",
-  description: "Plan your visa-free travel routes around the world",
-  generator: 'v0.app',
-  icons: {
-    icon: [
-      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
-      { url: '/favicon.ico', sizes: 'any' }
-    ],
-    apple: [
-      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }
-    ],
-    other: [
-      { url: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' }
-    ]
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Visa Planner",
+    template: "%s | Visa Planner",
   },
-  manifest: '/site.webmanifest',
+  description: "Plan multi-country trips and instantly check visa requirements by passport.",
+  applicationName: "Visa Planner",
+  category: "travel",
+  alternates: {
+    canonical: "/",
+  },
+  keywords: [
+    "visa planner",
+    "visa requirements",
+    "travel planning",
+    "passport visa checker",
+    "multi-country trip",
+  ],
+  icons: {
+    icon: "/placeholder-logo.svg",
+    apple: "/placeholder-logo.svg",
+  },
+  manifest: "/manifest.webmanifest",
   openGraph: {
     title: "Visa Planner",
-    description: "Plan your visa-free travel routes around the world",
+    description: "Plan multi-country trips and instantly check visa requirements by passport.",
     type: "website",
+    url: "/",
+    siteName: "Visa Planner",
     images: [
       {
-        url: "/logo.jpg",
+        url: "/placeholder-logo.svg",
         width: 1200,
         height: 630,
-        alt: "Visa Planner Logo"
-      }
-    ]
+        alt: "Visa Planner",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Visa Planner",
-    description: "Plan your visa-free travel routes around the world",
-    images: ["/logo.jpg"]
-  }
+    description: "Plan multi-country trips and instantly check visa requirements by passport.",
+    images: ["/placeholder-logo.svg"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
 }
 
 export default function RootLayout({

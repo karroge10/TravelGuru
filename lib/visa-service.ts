@@ -107,7 +107,8 @@ export function getVisaRequirementForCountry(
       country: 'Own Country',
       countryCode,
       requirement: 'visa-free',
-      notes: 'No visa required for own country'
+      notes: 'No visa required for own country',
+      dataSource: 'api',
     }
   }
 

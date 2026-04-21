@@ -44,6 +44,9 @@ export interface ProcessedVisaRequirement {
   requirement: "visa-free" | "visa-required" | "visa-on-arrival" | "e-visa" | "no-admission"
   duration?: number
   notes?: string
+  dataSource?: "api"
+  lastUpdated?: string
+  sourceUrl?: string
 }
 
 // Cache for API responses to avoid repeated calls
@@ -129,7 +132,9 @@ export async function getAllVisaRequirements(passportCode: string): Promise<Reco
         countryCode: dest.code,
         requirement: "visa-free",
         duration: dest.duration,
-        notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined
+        notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined,
+        dataSource: "api",
+        lastUpdated: countryData.last_updated,
       }
     })
 
@@ -140,7 +145,9 @@ export async function getAllVisaRequirements(passportCode: string): Promise<Reco
         countryCode: dest.code,
         requirement: "visa-on-arrival",
         duration: dest.duration,
-        notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined
+        notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined,
+        dataSource: "api",
+        lastUpdated: countryData.last_updated,
       }
     })
 
@@ -151,7 +158,9 @@ export async function getAllVisaRequirements(passportCode: string): Promise<Reco
         countryCode: dest.code,
         requirement: "e-visa",
         duration: dest.duration,
-        notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined
+        notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined,
+        dataSource: "api",
+        lastUpdated: countryData.last_updated,
       }
     })
 
@@ -162,7 +171,9 @@ export async function getAllVisaRequirements(passportCode: string): Promise<Reco
         countryCode: dest.code,
         requirement: "visa-required",
         duration: dest.duration,
-        notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined
+        notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined,
+        dataSource: "api",
+        lastUpdated: countryData.last_updated,
       }
     })
 
@@ -173,7 +184,9 @@ export async function getAllVisaRequirements(passportCode: string): Promise<Reco
         countryCode: dest.code,
         requirement: "no-admission",
         duration: dest.duration,
-        notes: "Entry not permitted"
+        notes: "Entry not permitted",
+        dataSource: "api",
+        lastUpdated: countryData.last_updated,
       }
     })
 
