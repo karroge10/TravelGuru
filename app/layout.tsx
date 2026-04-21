@@ -37,8 +37,12 @@ export const metadata: Metadata = {
     "multi-country trip",
   ],
   icons: {
-    icon: "/placeholder-logo.svg",
-    apple: "/placeholder-logo.svg",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
   manifest: "/manifest.webmanifest",
   openGraph: {
