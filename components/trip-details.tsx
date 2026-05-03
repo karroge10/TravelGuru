@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { calculateTotalDistance, type Country } from "@/lib/visa-data"
 import { ProcessedVisaRequirement } from "@/lib/visa-api"
-import { getISOFromGeographyId, getCountryNameFromCode, getFlagEmoji } from "@/lib/country-mapping"
+import { getISOFromGeographyId, getCountryNameFromCode } from "@/lib/country-mapping"
 import { FlagImage } from "@/components/flag-image"
 import { getVisaRequirementForCountry, type CombinedVisaRequirement } from "@/lib/visa-service"
 import {
@@ -243,7 +243,12 @@ function CountryItem({
                     {index}
                   </div>
                 )}
-                <h3 className="font-semibold text-sm">{country.name}</h3>
+                <span className="flex items-center gap-2 min-w-0">
+                  <h3 className="font-semibold text-sm truncate">{country.name}</h3>
+                  {isoCode ? (
+                    <FlagImage isoCode={isoCode} size={16} className="inline-block flex-shrink-0" />
+                  ) : null}
+                </span>
               </div>
               <Button
                 variant="ghost"

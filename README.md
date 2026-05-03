@@ -1,6 +1,6 @@
 # Visa Planner
 
-Visa Planner is an interactive world map for planning multi-country trips and checking visa requirements by passport.
+Visa Planner is an open source interactive world map for planning multi-country trips and checking visa requirements by passport. Issues and pull requests are welcome.
 
 Pick your nationality, click countries on the map to build a route, and instantly see visa status for each stop.
 
@@ -25,7 +25,7 @@ Most tools answer one destination at a time. This app focuses on route planning 
 
 ## Tech stack
 
-- Next.js 15
+- Next.js 16
 - React 19 + TypeScript
 - Tailwind CSS
 - Framer Motion
@@ -53,7 +53,7 @@ Open the local URL shown in your terminal.
 The app currently reads visa data from `passport-visa-api`:
 https://github.com/nickypangers/passport-visa-api?tab=MIT-1-ov-file
 
-Important: visa policies change often. Always verify with official government or embassy sources before traveling.
+DISCLAIMER: Visa policies change often. Always verify with official government or embassy sources before traveling.
 
 ## Known limitations
 
@@ -70,24 +70,16 @@ Important: visa policies change often. Always verify with official government or
 - Add test coverage for critical country pairs
 - Add analytics for most checked routes
 
-## Publishing note
-
-If you plan to make this project public, keep the disclaimer above and avoid marketing this as legal advice.
-
 ## Scripts
 
 - `npm run dev` starts development server
 - `npm run build` builds production bundle
 - `npm run start` runs production server
-- `npm run lint` runs linter
+- `npm run lint` runs ESLint
 
-## Basic test plan
+## Contributing
 
-- Run `npm run lint` and confirm no errors
-- Run `npm run build` and confirm production build succeeds
-- Run `npm run dev`, select passport(s), and confirm visa data loads
-- Build a route with multiple countries, plan it, then verify trip details and export
-- Verify disclaimer/source attribution is visible before publishing
+This project is open source under the MIT License. If you want to improve the app, fix a bug, or extend visa handling, open an issue or submit a pull request. A quick `npm run lint` and `npm run build` on your branch before opening a PR is always appreciated.
 
 ## License
 

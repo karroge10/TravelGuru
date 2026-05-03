@@ -10,7 +10,8 @@ import { RouteLines } from "@/components/route-lines"
 import { NationalityDropdown } from "@/components/nationality-dropdown"
 import { type ProcessedVisaRequirement } from "@/lib/visa-api"
 import { calculateTotalDistance, type Country } from "@/lib/visa-data"
-import { getISOFromGeographyId, getCountryNameFromCode, getFlagEmoji } from "@/lib/country-mapping"
+import { getISOFromGeographyId, getCountryNameFromCode } from "@/lib/country-mapping"
+import { FlagImage } from "@/components/flag-image"
 import { getVisaRequirementsForNationality, getVisaRequirementForCountry, combineVisaRequirements, type CombinedVisaRequirement } from "@/lib/visa-service"
 import { Flag, RotateCcw, Undo2, Globe, Filter, Share2, Save, Download, Home } from "lucide-react"
 import Image from "next/image"
@@ -348,18 +349,24 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
     return visaReq.requirement?.replace("-", " ") || "Unknown"
   }, [hoveredCountry, allGeographies, nationality, secondaryNationality, visaRequirements])
 
+  const hoveredCountryIso = useMemo(() => {
+    if (!hoveredCountry) return null
+    const geo = allGeographies.find((g) => g.properties.name === hoveredCountry)
+    return geo ? getISOFromGeographyId(geo.id) : null
+  }, [hoveredCountry, allGeographies])
+
   if (!nationality) {
     return (
       <div className="min-h-screen flex items-center sm:items-center justify-center pb-40 sm:pt-0">
         <div className="text-center">
-          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6 overflow-hidden">
-            <Image 
-              src="/placeholder-logo.svg" 
-              alt="Visa Planner Logo" 
-              width={80} 
-              height={80} 
+          <div className="relative w-20 h-20 rounded-full bg-primary/10 mx-auto mb-6 overflow-hidden">
+            <Image
+              src="/placeholder-logo.svg"
+              alt="Visa Planner Logo"
+              fill
               className="object-cover rounded-full"
               priority
+              sizes="80px"
             />
           </div>
           <h1 className="text-4xl font-bold mb-3">Visa Planner</h1>
@@ -958,7 +965,12 @@ Plan your own visa-free routes at Visa Planner!`
                 }}
               >
                 <Card className={`px-3 py-2 bg-card/95 backdrop-blur-sm border-primary/20 shadow-lg ${isMobile ? 'text-xs' : 'px-4'}`}>
-                  <p className={`font-medium ${isMobile ? 'text-xs' : 'text-sm'}`}>{hoveredCountry}</p>
+                  <div className={`flex items-center gap-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                    {hoveredCountryIso ? (
+                      <FlagImage isoCode={hoveredCountryIso} size={16} className="inline-block flex-shrink-0" />
+                    ) : null}
+                    <p className="font-medium">{hoveredCountry}</p>
+                  </div>
                   <p className={`text-muted-foreground capitalize ${isMobile ? 'text-[10px]' : 'text-xs'}`}>
                     {tooltipContent}
                   </p>
