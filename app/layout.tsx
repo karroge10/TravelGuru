@@ -15,7 +15,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 })
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://visaplanner.app"
+function getSiteUrl(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "")
+  if (fromEnv) return fromEnv
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return "https://visaplanner.app"
+}
+
+const siteUrl = getSiteUrl()
+
+const ogImage = "/og.png"
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -53,10 +62,10 @@ export const metadata: Metadata = {
     siteName: "Visa Planner",
     images: [
       {
-        url: "/placeholder-logo.svg",
-        width: 1200,
-        height: 630,
-        alt: "Visa Planner",
+        url: ogImage,
+        width: 1920,
+        height: 981,
+        alt: "Visa Planner — world map and trip planning",
       },
     ],
   },
@@ -64,7 +73,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Visa Planner",
     description: "Plan multi-country trips and instantly check visa requirements by passport.",
-    images: ["/placeholder-logo.svg"],
+    images: [ogImage],
   },
   robots: {
     index: true,
@@ -90,25 +99,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased dark min-h-screen bg-background text-foreground`}>
-        <div className="flex min-h-screen flex-col">
-          <main className="flex-1">{children}</main>
-          <footer className="border-t border-border/60 bg-background/95">
-            <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-4 text-xs text-muted-foreground sm:flex-row">
-              <p>© 2026 Visa Planner. All rights reserved.</p>
-              <p>
-                Made with ❤️ by{" "}
-                <a
-                  href="https://egorkabantsov.vercel.app"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="transition-colors hover:text-foreground"
-                >
-                  Egor Kabantsov
-                </a>
-              </p>
-            </div>
-          </footer>
-        </div>
+        {children}
         <Toaster position="bottom-left" />
         <Analytics />
       </body>

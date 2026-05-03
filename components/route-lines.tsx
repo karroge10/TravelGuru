@@ -19,11 +19,12 @@ function MarkerWithZoom({ country, index, isStart, isEnd, isWaypoint, route }: {
 }) {
   const { k: zoom } = useZoomPanContext()
   
-  // Calculate dynamic marker size based on zoom level
+  // Calculate dynamic marker size based on zoom level (inverse scale so on-screen size stays sane)
   const baseRadius = isStart ? 6 : isEnd ? 8 : 8
   const radius = Math.max(3, Math.min(12, baseRadius / zoom))
   const strokeWidth = Math.max(1, Math.min(3, 2 / zoom))
-  const fontSize = Math.max(4, Math.min(16, radius * 0.8))
+  // Keep digits inside the circle: no min font that exceeds small radii (was max(4, ...) vs r≥3)
+  const fontSize = Math.max(2, Math.min(11, radius * 0.52))
 
   // Determine marker type and properties
   const markerType = isStart ? 'start' : isEnd ? 'end' : 'waypoint'
@@ -72,8 +73,9 @@ function MarkerWithZoom({ country, index, isStart, isEnd, isWaypoint, route }: {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.2 }}
           textAnchor="middle"
-          y={fontSize * 0.3}
+          dominantBaseline="middle"
           x={0}
+          y={0}
           style={{
             fontSize: `${fontSize}px`,
             fill: "oklch(0.12 0.01 240)",

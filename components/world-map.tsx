@@ -790,6 +790,17 @@ Plan your own visa-free routes at Visa Planner!`
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             <div className="flex-1 min-w-0">
               <h1 className="text-lg sm:text-2xl font-bold">Visa Planner</h1>
+              <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 truncate">
+                Made by{" "}
+                <a
+                  href="https://egorkabantsov.vercel.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  Egor Kabantsov
+                </a>
+              </p>
             </div>
             <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <Button
