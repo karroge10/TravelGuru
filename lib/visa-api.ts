@@ -1,5 +1,7 @@
 // API client for visa requirements using Passport Visa API
-const API_BASE_URL = "https://rough-sun-2523.fly.dev"
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_VISA_API_BASE_URL?.replace(/\/$/, "") ??
+  "https://rough-sun-2523.fly.dev"
 
 // API Response Types based on the OpenAPI schema
 export interface VisaDestination {
@@ -19,24 +21,6 @@ export interface CountryVisaData {
   last_updated: string
 }
 
-export interface VisaRequirement {
-  id: string
-  passport: {
-    name: string
-    code: string
-  }
-  destination: {
-    name: string
-    code: string
-  }
-  dur: number | null
-  category: {
-    name: string
-    code: string
-  }
-  last_updated: string
-}
-
 // Processed visa requirement for UI
 export interface ProcessedVisaRequirement {
   country: string
@@ -49,72 +33,38 @@ export interface ProcessedVisaRequirement {
   sourceUrl?: string
 }
 
-// Cache for API responses to avoid repeated calls
-const cache = new Map<string, any>()
-
-// Global variable to store the last updated date from API
-let lastUpdatedDate: string | null = null
+const countryDataCache = new Map<string, CountryVisaData>()
+const allRequirementsCache = new Map<string, Record<string, ProcessedVisaRequirement>>()
 
 export async function getCountryVisaData(countryCode: string): Promise<CountryVisaData | null> {
   const cacheKey = `country-${countryCode}`
   const url = `${API_BASE_URL}/country/${countryCode}`
-  
 
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey)
-  }
+  const cached = countryDataCache.get(cacheKey)
+  if (cached) return cached
 
   try {
     const response = await fetch(url)
 
     if (!response.ok) {
-      const errorText = await response.text()
+      await response.text()
       return null
     }
 
-    const data = await response.json()
-    
-    // Store the last updated date globally
-    if (data.last_updated) {
-      lastUpdatedDate = data.last_updated
-    }
-    
-    cache.set(cacheKey, data)
+    const data = (await response.json()) as CountryVisaData
+
+    countryDataCache.set(cacheKey, data)
     return data
-  } catch (error) {
-    return null
-  }
-}
-
-export async function getSpecificVisaRequirement(passportCode: string, destinationCode: string): Promise<VisaRequirement | null> {
-  const cacheKey = `visa-${passportCode}-${destinationCode}`
-
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey)
-  }
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/visa/${passportCode}/${destinationCode}`)
-
-    if (!response.ok) {
-      return null
-    }
-
-    const data = await response.json()
-    cache.set(cacheKey, data)
-    return data
-  } catch (error) {
+  } catch {
     return null
   }
 }
 
 export async function getAllVisaRequirements(passportCode: string): Promise<Record<string, ProcessedVisaRequirement>> {
   const cacheKey = `all-${passportCode}`
-  
 
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey)
-  }
+  const cached = allRequirementsCache.get(cacheKey)
+  if (cached) return cached
 
   try {
     const countryData = await getCountryVisaData(passportCode)
@@ -131,7 +81,7 @@ export async function getAllVisaRequirements(passportCode: string): Promise<Reco
         country: dest.name,
         countryCode: dest.code,
         requirement: "visa-free",
-        duration: dest.duration,
+        duration: dest.duration ?? undefined,
         notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined,
         dataSource: "api",
         lastUpdated: countryData.last_updated,
@@ -144,7 +94,7 @@ export async function getAllVisaRequirements(passportCode: string): Promise<Reco
         country: dest.name,
         countryCode: dest.code,
         requirement: "visa-on-arrival",
-        duration: dest.duration,
+        duration: dest.duration ?? undefined,
         notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined,
         dataSource: "api",
         lastUpdated: countryData.last_updated,
@@ -157,7 +107,7 @@ export async function getAllVisaRequirements(passportCode: string): Promise<Reco
         country: dest.name,
         countryCode: dest.code,
         requirement: "e-visa",
-        duration: dest.duration,
+        duration: dest.duration ?? undefined,
         notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined,
         dataSource: "api",
         lastUpdated: countryData.last_updated,
@@ -170,7 +120,7 @@ export async function getAllVisaRequirements(passportCode: string): Promise<Reco
         country: dest.name,
         countryCode: dest.code,
         requirement: "visa-required",
-        duration: dest.duration,
+        duration: dest.duration ?? undefined,
         notes: dest.duration ? `Stay up to ${dest.duration} days` : undefined,
         dataSource: "api",
         lastUpdated: countryData.last_updated,
@@ -183,28 +133,16 @@ export async function getAllVisaRequirements(passportCode: string): Promise<Reco
         country: dest.name,
         countryCode: dest.code,
         requirement: "no-admission",
-        duration: dest.duration,
+        duration: dest.duration ?? undefined,
         notes: "Entry not permitted",
         dataSource: "api",
         lastUpdated: countryData.last_updated,
       }
     })
 
-    
-    cache.set(cacheKey, requirements)
+    allRequirementsCache.set(cacheKey, requirements)
     return requirements
-  } catch (error) {
+  } catch {
     return {}
   }
-}
-
-// Get the last updated date from the API data
-export function getLastUpdatedDate(): string | null {
-  return lastUpdatedDate
-}
-
-// Clear cache (useful for testing or when data needs refresh)
-export function clearCache() {
-  cache.clear()
-  lastUpdatedDate = null
 }

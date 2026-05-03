@@ -12,7 +12,12 @@ import { type ProcessedVisaRequirement } from "@/lib/visa-api"
 import { calculateTotalDistance, type Country } from "@/lib/visa-data"
 import { getISOFromGeographyId, getCountryNameFromCode } from "@/lib/country-mapping"
 import { FlagImage } from "@/components/flag-image"
-import { getVisaRequirementsForNationality, getVisaRequirementForCountry, combineVisaRequirements, type CombinedVisaRequirement } from "@/lib/visa-service"
+import {
+  getVisaRequirementsForNationality,
+  getVisaRequirementForCountry,
+  combineVisaRequirements,
+  type CombinedVisaRequirement,
+} from "@/lib/visa-service"
 import { Flag, RotateCcw, Undo2, Globe, Filter, Share2, Save, Download, Home } from "lucide-react"
 import Image from "next/image"
 import {
@@ -35,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { type MapGeography, getCentroidFromMapGeography } from "@/lib/map-geography"
 
 const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json"
 
@@ -58,9 +64,9 @@ function GeographiesWrapper({
   isRoutePlanned 
 }: {
   geoUrl: string
-  onGeographiesLoad: (geographies: any[]) => void
-  getCountryColor: (geo: any) => string
-  handleCountryClick: (geo: any) => void
+  onGeographiesLoad: (geographies: MapGeography[]) => void
+  getCountryColor: (geo: MapGeography) => string
+  handleCountryClick: (geo: MapGeography) => void
   setHoveredCountry: (country: string | null) => void
   setMousePosition: (position: { x: number; y: number } | null) => void
   isRoutePlanned: boolean
@@ -76,7 +82,7 @@ function GeographiesWrapper({
         if (!hasLoadedRef.current && geographies.length > 0) {
           hasLoadedRef.current = true
           setTimeout(() => {
-            onGeographiesLoad(geographies)
+            onGeographiesLoad(geographies as MapGeography[])
           }, 0)
         }
 
@@ -88,7 +94,7 @@ function GeographiesWrapper({
                 geography={geo}
                 onClick={() => handleCountryClick(geo)}
                 onMouseEnter={(e: React.MouseEvent) => {
-                  setHoveredCountry(geo.properties.name)
+                  setHoveredCountry(geo.properties.name ?? null)
                   setMousePosition({ x: e.clientX, y: e.clientY })
                 }}
                 onMouseLeave={() => {
@@ -106,7 +112,7 @@ function GeographiesWrapper({
                 }}
                 onTouchStart={(e: React.TouchEvent) => {
                   const touch = e.touches[0]
-                  setHoveredCountry(geo.properties.name)
+                  setHoveredCountry(geo.properties.name ?? null)
                   setMousePosition({ x: touch.clientX, y: touch.clientY })
                 }}
                 onTouchEnd={() => {
@@ -160,12 +166,71 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
   const [showVisaRequiredOnly, setShowVisaRequiredOnly] = useState(false)
   const [showEVisaOnly, setShowEVisaOnly] = useState(false)
   const [showOnArrivalOnly, setShowOnArrivalOnly] = useState(false)
-  const [allGeographies, setAllGeographies] = useState<any[]>([])
+  const [allGeographies, setAllGeographies] = useState<MapGeography[]>([])
   const [visaRequirements, setVisaRequirements] = useState<Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>>({})
   const [primaryVisaRequirements, setPrimaryVisaRequirements] = useState<Record<string, ProcessedVisaRequirement>>({})
   const [secondaryVisaRequirements, setSecondaryVisaRequirements] = useState<Record<string, ProcessedVisaRequirement>>({})
   const [isLoadingVisa, setIsLoadingVisa] = useState(true)
   const [showTripDetails, setShowTripDetails] = useState(false)
+
+  const handleReset = useCallback(() => {
+    setRoute([])
+    setStep("select-start")
+    setIsRoutePlanned(false)
+    setShowResetDialog(false)
+    if (typeof window !== "undefined" && nationality) {
+      const storageKey = secondaryNationality
+        ? `trip-${nationality}-${secondaryNationality}`
+        : `trip-${nationality}`
+      localStorage.removeItem(storageKey)
+    }
+    toast.info("Trip reset")
+  }, [nationality, secondaryNationality])
+
+  const handlePlanRoute = useCallback(() => {
+    setIsRoutePlanned(true)
+    const distance = calculateTotalDistance(route)
+    toast.success("Route planned!", {
+      description: `${distance.toLocaleString()} km total distance`,
+    })
+  }, [route])
+
+  const handleUndoLast = useCallback(() => {
+    if (route.length === 0) return
+
+    const removed = route[route.length - 1]
+    const newRoute = route.slice(0, -1)
+    setRoute(newRoute)
+
+    if (newRoute.length === 0) {
+      setStep("select-start")
+      setIsRoutePlanned(false)
+    } else if (newRoute.length === 1) {
+      setStep("select-destination")
+      setIsRoutePlanned(false)
+    }
+
+    toast.info(`Removed: ${removed.name}`)
+  }, [route])
+
+  const handleCancelPlanning = useCallback(() => {
+    setIsRoutePlanned(false)
+    toast.info("Edit mode enabled")
+  }, [])
+
+  const handleSaveTrip = useCallback(() => {
+    if (route.length === 0) {
+      toast.error("No trip to save")
+      return
+    }
+    if (typeof window !== "undefined" && nationality) {
+      const storageKey = secondaryNationality
+        ? `trip-${nationality}-${secondaryNationality}`
+        : `trip-${nationality}`
+      localStorage.setItem(storageKey, JSON.stringify({ route, isPlanned: isRoutePlanned }))
+    }
+    toast.success("Trip saved!")
+  }, [route, isRoutePlanned, nationality, secondaryNationality])
 
   // All useEffect hooks must be called before any conditional returns
   useEffect(() => {
@@ -285,7 +350,7 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
       } catch (e) {
       }
     }
-  }, [nationality, secondaryNationality])
+  }, [nationality, secondaryNationality, handleReset])
 
   useEffect(() => {
     // Only run on client side to avoid hydration mismatch
@@ -325,7 +390,15 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
 
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [route, isRoutePlanned, showResetDialog])
+  }, [
+    route,
+    isRoutePlanned,
+    showResetDialog,
+    handlePlanRoute,
+    handleUndoLast,
+    handleSaveTrip,
+    handleCancelPlanning,
+  ])
 
   // Memoize tooltip content calculation for better performance
   // Must be called before any early returns to maintain hook order
@@ -343,9 +416,11 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
       return "visa free"
     }
     
-    const visaReq = isoCode ? visaRequirements[isoCode] : null
+    const visaReq = isoCode
+      ? getVisaRequirementForCountry(isoCode, nationality ?? "", visaRequirements, secondaryNationality)
+      : null
     if (!visaReq) return "Unknown"
-    
+
     return visaReq.requirement?.replace("-", " ") || "Unknown"
   }, [hoveredCountry, allGeographies, nationality, secondaryNationality, visaRequirements])
 
@@ -386,10 +461,10 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
     )
   }
 
-  const handleCountryClick = (geo: any) => {
+  const handleCountryClick = (geo: MapGeography) => {
     if (isRoutePlanned) return
 
-    const countryName = geo.properties.name
+    const countryName = geo.properties.name ?? ""
     const countryId = geo.id
 
     // Check if country already in route - if so, deselect it
@@ -399,52 +474,22 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
       return
     }
 
+    const centroid = getCentroidFromMapGeography(geo)
+
     if (step === "select-start") {
-      setRoute([{ name: countryName, id: countryId, coordinates: getCentroid(geo) }])
+      setRoute([{ name: countryName, id: countryId, coordinates: centroid }])
       setStep("select-destination")
       toast.success(`Start: ${countryName}`)
     } else if (step === "select-destination") {
-      setRoute([...route, { name: countryName, id: countryId, coordinates: getCentroid(geo) }])
+      setRoute([...route, { name: countryName, id: countryId, coordinates: centroid }])
       setStep("adding-countries")
       toast.success(`Destination: ${countryName}`)
     } else if (step === "adding-countries") {
-      setRoute([...route, { name: countryName, id: countryId, coordinates: getCentroid(geo) }])
+      setRoute([...route, { name: countryName, id: countryId, coordinates: centroid }])
     }
   }
 
-  const getCentroid = (geo: any): [number, number] => {
-    // Handle different geometry types (Polygon vs MultiPolygon)
-    let coordinates = geo.geometry.coordinates
-    
-    // For MultiPolygon, use the largest polygon (usually the mainland)
-    if (geo.geometry.type === 'MultiPolygon') {
-      // Find the polygon with the most coordinates (likely the mainland)
-      coordinates = coordinates.reduce((largest: any, current: any) => {
-        return current[0].length > largest[0].length ? current : largest
-      })
-    }
-    
-    // Extract the outer ring coordinates
-    const outerRing = coordinates[0]
-    if (!outerRing || outerRing.length === 0) return [0, 0]
-
-    let sumLon = 0
-    let sumLat = 0
-    let count = 0
-
-    // Process only the outer ring coordinates
-    outerRing.forEach((coord: any) => {
-      if (Array.isArray(coord) && coord.length >= 2) {
-        sumLon += coord[0]
-        sumLat += coord[1]
-        count++
-      }
-    })
-
-    return count > 0 ? [sumLon / count, sumLat / count] : [0, 0]
-  }
-
-  const getCountryColor = (geo: any) => {
+  const getCountryColor = (geo: MapGeography) => {
     const countryId = geo.id
     const isInRoute = route.some((c) => c.id === countryId)
 
@@ -460,7 +505,9 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
     }
     
     // Get visa requirement from combined requirements
-    const visaReq = isoCode ? visaRequirements[isoCode] : null
+    const visaReq = isoCode
+      ? getVisaRequirementForCountry(isoCode, nationality, visaRequirements, secondaryNationality)
+      : null
 
     if (isInRoute && isRoutePlanned) {
       // Show actual visa requirement colors for countries in the planned route
@@ -530,51 +577,6 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
     return "#1a1f2e"
   }
 
-  const handlePlanRoute = () => {
-    setIsRoutePlanned(true)
-    const distance = calculateTotalDistance(route)
-    toast.success("Route planned!", {
-      description: `${distance.toLocaleString()} km total distance`,
-    })
-  }
-
-  const handleReset = () => {
-    setRoute([])
-    setStep("select-start")
-    setIsRoutePlanned(false)
-    setShowResetDialog(false)
-    if (typeof window !== 'undefined' && nationality) {
-      const storageKey = secondaryNationality 
-        ? `trip-${nationality}-${secondaryNationality}`
-        : `trip-${nationality}`
-      localStorage.removeItem(storageKey)
-    }
-    toast.info("Trip reset")
-  }
-
-  const handleUndoLast = () => {
-    if (route.length === 0) return
-
-    const removed = route[route.length - 1]
-    const newRoute = route.slice(0, -1)
-    setRoute(newRoute)
-
-    if (newRoute.length === 0) {
-      setStep("select-start")
-      setIsRoutePlanned(false)
-    } else if (newRoute.length === 1) {
-      setStep("select-destination")
-      setIsRoutePlanned(false)
-    }
-
-    toast.info(`Removed: ${removed.name}`)
-  }
-
-  const handleCancelPlanning = () => {
-    setIsRoutePlanned(false)
-    toast.info("Edit mode enabled")
-  }
-
   const removeCountry = (index: number) => {
     const removed = route[index]
     const newRoute = route.filter((_, i) => i !== index)
@@ -596,29 +598,10 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
     setRoute(newRoute)
   }
 
-  const handleSaveTrip = () => {
-    if (route.length === 0) {
-      toast.error("No trip to save")
-      return
-    }
-    if (typeof window !== 'undefined' && nationality) {
-      const storageKey = secondaryNationality 
-        ? `trip-${nationality}-${secondaryNationality}`
-        : `trip-${nationality}`
-      localStorage.setItem(storageKey, JSON.stringify({ route, isPlanned: isRoutePlanned }))
-    }
-    toast.success("Trip saved!")
-  }
-
   const handleShare = async () => {
     if (route.length === 0) {
       toast.error("No trip to share")
       return
-    }
-
-    const tripData = {
-      nationality,
-      countries: route.map((c) => c.name),
     }
 
     // Calculate trip statistics
@@ -633,8 +616,10 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
         return true
       }
       
-      const apiVisaReq = isoCode ? visaRequirements[isoCode] : null
-      const requirement = apiVisaReq?.requirement || 'unknown'
+      const apiVisaReq = isoCode
+        ? getVisaRequirementForCountry(isoCode, nationality, visaRequirements, secondaryNationality)
+        : null
+      const requirement = apiVisaReq?.requirement || "unknown"
       return requirement === "visa-free"
     }).length
 
@@ -692,11 +677,12 @@ Plan your own visa-free routes at Visa Planner!`
         name: c.name,
         dates: c.dates,
         notes: c.notes,
-        visa: isoCode ? visaRequirements[isoCode] : null,
+        visa: isoCode
+          ? getVisaRequirementForCountry(isoCode, nationality, visaRequirements, secondaryNationality)
+          : null,
       }
       }),
       totalDistance: calculateTotalDistance(route),
-      totalVisaCost: calculateTotalVisaCost(route),
       exportedAt: new Date().toISOString(),
     }
 
@@ -715,20 +701,6 @@ Plan your own visa-free routes at Visa Planner!`
     const newRoute = [...route]
     newRoute[index] = { ...newRoute[index], ...updates }
     setRoute(newRoute)
-  }
-
-  const calculateDistance = (coord1: [number, number], coord2: [number, number]): number => {
-    const R = 6371
-    const dLat = ((coord2[1] - coord1[1]) * Math.PI) / 180
-    const dLon = ((coord2[0] - coord1[0]) * Math.PI) / 180
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((coord1[1] * Math.PI) / 180) *
-        Math.cos((coord2[1] * Math.PI) / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    return R * c
   }
 
   const getTooltipPosition = (mousePos: { x: number; y: number }) => {
@@ -760,26 +732,6 @@ Plan your own visa-free routes at Visa Planner!`
     }
     
     return { x, y }
-  }
-
-  const calculateTotalDistance = (routeData: Country[]): number => {
-    let total = 0
-    for (let i = 0; i < routeData.length - 1; i++) {
-      total += calculateDistance(routeData[i].coordinates, routeData[i + 1].coordinates)
-    }
-    return Math.round(total)
-  }
-
-  const calculateTotalVisaCost = (routeData: Country[]): number => {
-    const total = 0
-    routeData.forEach((country) => {
-      const geo = allGeographies.find((g) => g.properties.name === country.name)
-      const isoCode = geo ? getISOFromGeographyId(geo.id) : null
-      const visa = isoCode ? getVisaRequirementForCountry(isoCode, nationality!, visaRequirements) : null
-      // API doesn't provide cost data, so we'll return 0 for now
-      // This can be enhanced when cost data is available
-    })
-    return total
   }
 
   return (
@@ -997,7 +949,7 @@ Plan your own visa-free routes at Visa Planner!`
               className={`absolute ${isMobile ? 'top-2 left-2' : 'top-4 left-4'}`}
             >
               <Card className={`p-3 bg-card/95 backdrop-blur-sm ${isMobile ? 'max-w-[240px]' : 'max-w-[280px]'}`}>
-                <h3 className={`font-semibold mb-2 ${isMobile ? 'text-xs' : 'text-xs'}`}>Visa Requirements</h3>
+                <h3 className="font-semibold mb-2 text-xs">Visa Requirements</h3>
                 <div className="grid grid-cols-1 gap-1.5 text-xs">
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "oklch(0.65 0.18 140)" }} />

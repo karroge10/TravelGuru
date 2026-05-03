@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { calculateTotalDistance, type Country } from "@/lib/visa-data"
-import { ProcessedVisaRequirement } from "@/lib/visa-api"
+import type { ProcessedVisaRequirement } from "@/lib/visa-api"
 import { getISOFromGeographyId, getCountryNameFromCode } from "@/lib/country-mapping"
 import { FlagImage } from "@/components/flag-image"
 import { getVisaRequirementForCountry, type CombinedVisaRequirement } from "@/lib/visa-service"
@@ -21,7 +21,6 @@ import {
   GripVertical,
 } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useState } from "react"
 import {
   DndContext,
   closestCenter,
@@ -32,7 +31,6 @@ import {
   DragEndEvent,
 } from "@dnd-kit/core"
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -41,6 +39,8 @@ import {
   useSortable,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core"
+import type { MapGeography } from "@/lib/map-geography"
 
 interface TripDetailsProps {
   route: Country[]
@@ -51,7 +51,7 @@ interface TripDetailsProps {
   onUpdate: (index: number, updates: Partial<Country>) => void
   isPlanned: boolean
   visaRequirements: Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>
-  allGeographies: any[]
+  allGeographies: MapGeography[]
   isMobile?: boolean
   showTripDetails?: boolean
   onCloseTripDetails?: () => void
@@ -79,7 +79,7 @@ function SortableCountryItem({
   onUpdate: (index: number, updates: Partial<Country>) => void
   isPlanned: boolean
   visaRequirements: Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>
-  allGeographies: any[]
+  allGeographies: MapGeography[]
 }) {
   const {
     attributes,
@@ -141,19 +141,20 @@ function CountryItem({
   onUpdate: (index: number, updates: Partial<Country>) => void
   isPlanned: boolean
   visaRequirements: Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>
-  allGeographies: any[]
-  dragAttributes?: any
-  dragListeners?: any
+  allGeographies: MapGeography[]
+  dragAttributes?: DraggableAttributes
+  dragListeners?: DraggableSyntheticListeners
   isDragging?: boolean
 }) {
 
   const isStart = index === 0
   const isEnd = index === route.length - 1
 
-  // Get visa requirement using the new service
   const geo = allGeographies.find((g) => g.properties.name === country.name)
   const isoCode = geo ? getISOFromGeographyId(geo.id) : null
-  const visaReq = isoCode ? visaRequirements[isoCode] : null
+  const visaReq = isoCode
+    ? getVisaRequirementForCountry(isoCode, nationality, visaRequirements, secondaryNationality)
+    : null
   const isStartHomeCountry = isStart && (isoCode === nationality || isoCode === secondaryNationality)
   
   // Check if this is a combined visa requirement (has bestPassport field)
@@ -444,7 +445,9 @@ export function TripDetails({
     if (isoCode === nationality || isoCode === secondaryNationality) {
       return true
     }
-    const visaReq = isoCode ? visaRequirements[isoCode] : null
+    const visaReq = isoCode
+      ? getVisaRequirementForCountry(isoCode, nationality, visaRequirements, secondaryNationality)
+      : null
     return visaReq?.requirement === "visa-free"
   }).length
 

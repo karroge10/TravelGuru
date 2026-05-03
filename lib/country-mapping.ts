@@ -1,7 +1,7 @@
 // Mapping between geography numeric IDs and ISO 2-letter country codes
 // This maps the numeric IDs used in the world map geography data to ISO codes used by the Passport Visa API
 
-export const GEOGRAPHY_ID_TO_ISO: Record<string, string> = {
+const GEOGRAPHY_ID_TO_ISO: Record<string, string> = {
   // Based on ISO 3166-1 numeric codes
   '004': 'AF', // Afghanistan
   '008': 'AL', // Albania
@@ -262,11 +262,6 @@ export const GEOGRAPHY_ID_TO_ISO: Record<string, string> = {
   // '010': 'AQ' - Antarctica - already mapped above
 }
 
-// Reverse mapping for quick lookups
-export const ISO_TO_GEOGRAPHY_ID: Record<string, string> = Object.fromEntries(
-  Object.entries(GEOGRAPHY_ID_TO_ISO).map(([id, iso]) => [iso, id])
-)
-
 // Helper function to get ISO code from geography ID
 // Reverse mapping from ISO codes to country names
 const isoToCountryName: Record<string, string> = {
@@ -488,20 +483,6 @@ export function getISOFromGeographyId(geographyId: string): string | null {
   }
   
   return GEOGRAPHY_ID_TO_ISO[geographyId] || null
-}
-
-// Helper function to get geography ID from ISO code
-export function getGeographyIdFromISO(isoCode: string): string | null {
-  return ISO_TO_GEOGRAPHY_ID[isoCode] || null
-}
-
-// Helper function to get country flag image URL from flagsapi.com
-export function getFlagEmoji(isoCode: string): string {
-  if (!isoCode || isoCode.length !== 2) {
-    return 'https://flagsapi.com/UN/flat/16.png'
-  }
-  
-  return `https://flagsapi.com/${isoCode.toUpperCase()}/flat/16.png`
 }
 
 // Helper function to get country flag image URL with custom size

@@ -1,4 +1,3 @@
-// Enhanced visa service with proper error handling and no hardcoded fallbacks
 import { getAllVisaRequirements, type ProcessedVisaRequirement } from "./visa-api"
 
 export interface VisaServiceError {
@@ -82,8 +81,6 @@ export async function getVisaRequirementsForNationality(
       isLoading: false
     }
   } catch (error) {
-    console.error('Visa API Error:', error)
-    
     return {
       data: null,
       error: {
@@ -99,31 +96,20 @@ export async function getVisaRequirementsForNationality(
 export function getVisaRequirementForCountry(
   countryCode: string,
   nationality: string,
-  visaRequirements: Record<string, ProcessedVisaRequirement>
-): ProcessedVisaRequirement | null {
-  // Special case: own country is always visa-free
-  if (countryCode === nationality) {
+  visaRequirements: Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>,
+  secondaryNationality?: string | null
+): ProcessedVisaRequirement | CombinedVisaRequirement | null {
+  if (countryCode === nationality || countryCode === secondaryNationality) {
     return {
-      country: 'Own Country',
+      country: "Own Country",
       countryCode,
-      requirement: 'visa-free',
-      notes: 'No visa required for own country',
-      dataSource: 'api',
+      requirement: "visa-free",
+      notes: "No visa required for own country",
+      dataSource: "api",
     }
   }
 
-  return visaRequirements[countryCode] || null
-}
-
-export function clearVisaCache() {
-  cache.clear()
-}
-
-export function getCacheStats() {
-  return {
-    size: cache.size,
-    keys: Array.from(cache.keys())
-  }
+  return visaRequirements[countryCode] ?? null
 }
 
 /**

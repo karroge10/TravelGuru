@@ -34,24 +34,25 @@ Most tools answer one destination at a time. This app focuses on route planning 
 
 ## Getting started
 
+This repo uses [pnpm](https://pnpm.io/). Copy `.env.example` to `.env` and adjust values if needed (all variables are optional for local dev).
+
 ### 1) Install dependencies
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### 2) Start the app
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Open the local URL shown in your terminal.
 
 ## How visa data works
 
-The app currently reads visa data from `passport-visa-api`:
-https://github.com/nickypangers/passport-visa-api?tab=MIT-1-ov-file
+The app fetches visa data from a Passport Visa API–compatible HTTP service. Override the base URL with `NEXT_PUBLIC_VISA_API_BASE_URL` if you self-host the API from [passport-visa-api](https://github.com/nickypangers/passport-visa-api?tab=MIT-1-ov-file).
 
 DISCLAIMER: Visa policies change often. Always verify with official government or embassy sources before traveling.
 
@@ -72,14 +73,14 @@ DISCLAIMER: Visa policies change often. Always verify with official government o
 
 ## Scripts
 
-- `npm run dev` starts development server
-- `npm run build` builds production bundle
-- `npm run start` runs production server
-- `npm run lint` runs ESLint
+- `pnpm dev` starts development server
+- `pnpm build` builds production bundle
+- `pnpm start` runs production server
+- `pnpm lint` runs ESLint
 
 ## Contributing
 
-This project is open source under the MIT License. If you want to improve the app, fix a bug, or extend visa handling, open an issue or submit a pull request. A quick `npm run lint` and `npm run build` on your branch before opening a PR is always appreciated.
+This project is open source under the MIT License. If you want to improve the app, fix a bug, or extend visa handling, open an issue or submit a pull request. A quick `pnpm lint` and `pnpm build` on your branch before opening a PR is always appreciated.
 
 ## License
 
