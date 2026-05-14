@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useEffect, useMemo, useCallback } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import React, { useState, useEffect, useMemo, useReducer, useEffectEvent } from "react"
+import { AnimatePresence, LazyMotion, domAnimation, m } from "framer-motion"
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -52,6 +52,84 @@ interface WorldMapProps {
 }
 
 type Step = "select-start" | "select-destination" | "adding-countries"
+
+interface PlannerState {
+  isRoutePlanned: boolean
+  route: Country[]
+  step: Step
+}
+
+type PlannerAction =
+  | { type: "add-country"; country: Country }
+  | { type: "move-country"; fromIndex: number; toIndex: number }
+  | { type: "remove-country"; index: number }
+  | { type: "reset" }
+  | { type: "restore"; isPlanned: boolean; route: Country[] }
+  | { type: "set-planned"; value: boolean }
+  | { type: "undo-last" }
+  | { type: "update-country"; index: number; updates: Partial<Country> }
+
+const initialPlannerState: PlannerState = {
+  isRoutePlanned: false,
+  route: [],
+  step: "select-start",
+}
+
+function getStepForRoute(route: Country[]): Step {
+  if (route.length === 0) return "select-start"
+  if (route.length === 1) return "select-destination"
+  return "adding-countries"
+}
+
+function plannerReducer(state: PlannerState, action: PlannerAction): PlannerState {
+  switch (action.type) {
+    case "add-country": {
+      const route = [...state.route, action.country]
+      return { ...state, route, step: getStepForRoute(route) }
+    }
+    case "move-country": {
+      const route = [...state.route]
+      const [moved] = route.splice(action.fromIndex, 1)
+      route.splice(action.toIndex, 0, moved)
+      return { ...state, route }
+    }
+    case "remove-country": {
+      const route = state.route.filter((_, index) => index !== action.index)
+      return {
+        ...state,
+        isRoutePlanned: route.length > 1 ? state.isRoutePlanned : false,
+        route,
+        step: getStepForRoute(route),
+      }
+    }
+    case "reset":
+      return initialPlannerState
+    case "restore":
+      return {
+        isRoutePlanned: action.isPlanned,
+        route: action.route,
+        step: getStepForRoute(action.route),
+      }
+    case "set-planned":
+      return { ...state, isRoutePlanned: action.value }
+    case "undo-last": {
+      const route = state.route.slice(0, -1)
+      return {
+        ...state,
+        isRoutePlanned: route.length > 1 ? state.isRoutePlanned : false,
+        route,
+        step: getStepForRoute(route),
+      }
+    }
+    case "update-country": {
+      const route = [...state.route]
+      route[action.index] = { ...route[action.index], ...action.updates }
+      return { ...state, route }
+    }
+    default:
+      return state
+  }
+}
 
 // Separate component to handle geographies properly
 function GeographiesWrapper({ 
@@ -155,12 +233,10 @@ function GeographiesWrapper({
 
 export function WorldMap({ nationality, onNationalityChange, secondaryNationality = null, onSecondaryNationalityChange }: WorldMapProps) {
   const isMobile = useIsMobile()
-  const [step, setStep] = useState<Step>("select-start")
-  const [route, setRoute] = useState<Country[]>([])
+  const [plannerState, dispatch] = useReducer(plannerReducer, initialPlannerState)
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null)
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null)
   const [position, setPosition] = useState({ coordinates: [0, 0], zoom: 1 })
-  const [isRoutePlanned, setIsRoutePlanned] = useState(false)
   const [showResetDialog, setShowResetDialog] = useState(false)
   const [showVisaFreeOnly, setShowVisaFreeOnly] = useState(false)
   const [showVisaRequiredOnly, setShowVisaRequiredOnly] = useState(false)
@@ -168,69 +244,62 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
   const [showOnArrivalOnly, setShowOnArrivalOnly] = useState(false)
   const [allGeographies, setAllGeographies] = useState<MapGeography[]>([])
   const [visaRequirements, setVisaRequirements] = useState<Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>>({})
-  const [primaryVisaRequirements, setPrimaryVisaRequirements] = useState<Record<string, ProcessedVisaRequirement>>({})
-  const [secondaryVisaRequirements, setSecondaryVisaRequirements] = useState<Record<string, ProcessedVisaRequirement>>({})
   const [isLoadingVisa, setIsLoadingVisa] = useState(true)
   const [showTripDetails, setShowTripDetails] = useState(false)
+  const { isRoutePlanned, route, step } = plannerState
 
-  const handleReset = useCallback(() => {
-    setRoute([])
-    setStep("select-start")
-    setIsRoutePlanned(false)
-    setShowResetDialog(false)
-    if (typeof window !== "undefined" && nationality) {
-      const storageKey = secondaryNationality
-        ? `trip-${nationality}-${secondaryNationality}`
-        : `trip-${nationality}`
+  const persistTrip = (nextRoute: Country[], nextIsPlanned: boolean) => {
+    if (typeof window === "undefined" || !nationality) return
+    const storageKey = secondaryNationality
+      ? `trip-${nationality}-${secondaryNationality}`
+      : `trip-${nationality}`
+    if (nextRoute.length === 0) {
       localStorage.removeItem(storageKey)
+      return
     }
-    toast.info("Trip reset")
-  }, [nationality, secondaryNationality])
+    localStorage.setItem(storageKey, JSON.stringify({ route: nextRoute, isPlanned: nextIsPlanned }))
+  }
 
-  const handlePlanRoute = useCallback(() => {
-    setIsRoutePlanned(true)
+  const handleReset = () => {
+    dispatch({ type: "reset" })
+    setShowResetDialog(false)
+    persistTrip([], false)
+    toast.info("Trip reset")
+  }
+
+  const handlePlanRoute = () => {
+    dispatch({ type: "set-planned", value: true })
+    persistTrip(route, true)
     const distance = calculateTotalDistance(route)
     toast.success("Route planned!", {
       description: `${distance.toLocaleString()} km total distance`,
     })
-  }, [route])
+  }
 
-  const handleUndoLast = useCallback(() => {
+  const handleUndoLast = () => {
     if (route.length === 0) return
 
     const removed = route[route.length - 1]
-    const newRoute = route.slice(0, -1)
-    setRoute(newRoute)
-
-    if (newRoute.length === 0) {
-      setStep("select-start")
-      setIsRoutePlanned(false)
-    } else if (newRoute.length === 1) {
-      setStep("select-destination")
-      setIsRoutePlanned(false)
-    }
-
+    const nextRoute = route.slice(0, -1)
+    dispatch({ type: "undo-last" })
+    persistTrip(nextRoute, nextRoute.length > 1 ? isRoutePlanned : false)
     toast.info(`Removed: ${removed.name}`)
-  }, [route])
+  }
 
-  const handleCancelPlanning = useCallback(() => {
-    setIsRoutePlanned(false)
+  const handleCancelPlanning = () => {
+    dispatch({ type: "set-planned", value: false })
+    persistTrip(route, false)
     toast.info("Edit mode enabled")
-  }, [])
+  }
 
-  const handleSaveTrip = useCallback(() => {
+  const handleSaveTrip = () => {
     if (route.length === 0) {
       toast.error("No trip to save")
       return
     }
-    if (typeof window !== "undefined" && nationality) {
-      const storageKey = secondaryNationality
-        ? `trip-${nationality}-${secondaryNationality}`
-        : `trip-${nationality}`
-      localStorage.setItem(storageKey, JSON.stringify({ route, isPlanned: isRoutePlanned }))
-    }
+    persistTrip(route, isRoutePlanned)
     toast.success("Trip saved!")
-  }, [route, isRoutePlanned, nationality, secondaryNationality])
+  }
 
   // All useEffect hooks must be called before any conditional returns
   useEffect(() => {
@@ -239,44 +308,54 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
     const fetchVisaData = async () => {
       setIsLoadingVisa(true)
       try {
-        // Fetch primary passport data
         const primaryResult = await getVisaRequirementsForNationality(nationality)
-        
         if (primaryResult.error) {
           toast.error("Failed to load visa requirements", {
             description: primaryResult.error.message,
           })
-          setPrimaryVisaRequirements({})
-        } else if (primaryResult.data) {
-          setPrimaryVisaRequirements(primaryResult.data)
-        } else {
-          setPrimaryVisaRequirements({})
+          setVisaRequirements({})
+          return
         }
-        
-        // Fetch secondary passport data if provided
+
+        const primaryRequirements = primaryResult.data ?? {}
+
         if (secondaryNationality) {
           const secondaryResult = await getVisaRequirementsForNationality(secondaryNationality)
-          
           if (secondaryResult.error) {
             toast.error("Failed to load secondary passport requirements", {
               description: secondaryResult.error.message,
             })
-            setSecondaryVisaRequirements({})
-          } else if (secondaryResult.data) {
-            setSecondaryVisaRequirements(secondaryResult.data)
-          } else {
-            setSecondaryVisaRequirements({})
+            setVisaRequirements({})
+            return
           }
-        } else {
-          setSecondaryVisaRequirements({})
+
+          const secondaryRequirements = secondaryResult.data ?? {}
+          setVisaRequirements(
+            combineVisaRequirements(
+              primaryRequirements,
+              secondaryRequirements,
+              nationality,
+              secondaryNationality
+            )
+          )
+          return
         }
-        
+
+        const requirements = { ...primaryRequirements }
+        if (!requirements[nationality]) {
+          requirements[nationality] = {
+            country: "Own Country",
+            countryCode: nationality,
+            requirement: "visa-free",
+            notes: "No visa required for own country",
+          }
+        }
+        setVisaRequirements(requirements)
       } catch (error) {
         toast.error("Failed to load visa requirements", {
           description: "Network error occurred. Please try again.",
         })
-        setPrimaryVisaRequirements({})
-        setSecondaryVisaRequirements({})
+        setVisaRequirements({})
       } finally {
         setIsLoadingVisa(false)
       }
@@ -284,39 +363,6 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
 
     fetchVisaData()
   }, [nationality, secondaryNationality])
-  
-  // Combine visa requirements when both are available
-  useEffect(() => {
-    if (!nationality) {
-      setVisaRequirements({})
-      return
-    }
-    
-    if (secondaryNationality && Object.keys(primaryVisaRequirements).length > 0 && Object.keys(secondaryVisaRequirements).length > 0) {
-      // Combine both passports
-      const combined = combineVisaRequirements(
-        primaryVisaRequirements,
-        secondaryVisaRequirements,
-        nationality,
-        secondaryNationality
-      )
-      setVisaRequirements(combined)
-    } else if (Object.keys(primaryVisaRequirements).length > 0) {
-      // Use only primary passport - ensure home country is included
-      const requirements = { ...primaryVisaRequirements }
-      if (nationality && !requirements[nationality]) {
-        requirements[nationality] = {
-          country: 'Own Country',
-          countryCode: nationality,
-          requirement: 'visa-free',
-          notes: 'No visa required for own country'
-        }
-      }
-      setVisaRequirements(requirements)
-    } else {
-      setVisaRequirements({})
-    }
-  }, [primaryVisaRequirements, secondaryVisaRequirements, nationality, secondaryNationality])
 
   useEffect(() => {
     // Only run on client side to avoid hydration mismatch
@@ -342,28 +388,17 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
               },
             },
           })
-          setRoute(parsed.route)
-          setIsRoutePlanned(parsed.isPlanned || false)
-          if (parsed.route.length === 1) setStep("select-destination")
-          else if (parsed.route.length > 1) setStep("adding-countries")
+          dispatch({ type: "restore", route: parsed.route, isPlanned: parsed.isPlanned || false })
         }
       } catch (e) {
       }
     }
   }, [nationality, secondaryNationality, handleReset])
 
-  useEffect(() => {
-    // Only run on client side to avoid hydration mismatch
-    if (typeof window === 'undefined' || !nationality) return
-    
-    if (route.length > 0) {
-      // Create storage key that includes both nationalities if secondary is set
-      const storageKey = secondaryNationality 
-        ? `trip-${nationality}-${secondaryNationality}`
-        : `trip-${nationality}`
-      localStorage.setItem(storageKey, JSON.stringify({ route, isPlanned: isRoutePlanned }))
-    }
-  }, [route, isRoutePlanned, nationality, secondaryNationality])
+  const onPlanRouteEvent = useEffectEvent(handlePlanRoute)
+  const onUndoLastEvent = useEffectEvent(handleUndoLast)
+  const onSaveTripEvent = useEffectEvent(handleSaveTrip)
+  const onCancelPlanningEvent = useEffectEvent(handleCancelPlanning)
 
   useEffect(() => {
     // Only run on client side to avoid hydration mismatch
@@ -372,33 +407,25 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (showResetDialog) setShowResetDialog(false)
-        else if (isRoutePlanned) handleCancelPlanning()
+        else if (isRoutePlanned) onCancelPlanningEvent()
         else if (route.length > 0) setShowResetDialog(true)
       }
       if (e.key === "Enter" && route.length >= 2 && !isRoutePlanned) {
-        handlePlanRoute()
+        onPlanRouteEvent()
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && route.length > 0 && !isRoutePlanned) {
         e.preventDefault()
-        handleUndoLast()
+        onUndoLastEvent()
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault()
-        handleSaveTrip()
+        onSaveTripEvent()
       }
     }
 
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [
-    route,
-    isRoutePlanned,
-    showResetDialog,
-    handlePlanRoute,
-    handleUndoLast,
-    handleSaveTrip,
-    handleCancelPlanning,
-  ])
+  }, [route.length, isRoutePlanned, showResetDialog, onPlanRouteEvent, onUndoLastEvent, onSaveTripEvent, onCancelPlanningEvent])
 
   // Memoize tooltip content calculation for better performance
   // Must be called before any early returns to maintain hook order
@@ -432,32 +459,34 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
 
   if (!nationality) {
     return (
-      <div className="min-h-screen flex items-center sm:items-center justify-center pb-40 sm:pt-0">
-        <div className="text-center">
-          <div className="relative w-20 h-20 rounded-full bg-primary/10 mx-auto mb-6 overflow-hidden">
-            <Image
-              src="/placeholder-logo.svg"
-              alt="Visa Planner Logo"
-              fill
-              className="object-cover rounded-full"
-              priority
-              sizes="80px"
-            />
-          </div>
-          <h1 className="text-4xl font-bold mb-3">Visa Planner</h1>
-          <p className="text-muted-foreground text-lg mb-8">Select your nationality to start planning your visa-free travel routes</p>
-          <div className="flex justify-center">
-            <NationalityDropdown 
-              nationality={nationality} 
-              onNationalityChange={onNationalityChange}
-              secondaryNationality={secondaryNationality}
-              onSecondaryChange={onSecondaryNationalityChange}
-              className="text-lg px-6 py-3"
-              showSecondaryToggle={false}
-            />
+      <LazyMotion features={domAnimation}>
+        <div className="min-h-screen flex items-center sm:items-center justify-center pb-40 sm:pt-0">
+          <div className="text-center">
+            <div className="relative size-20 rounded-full bg-primary/10 mx-auto mb-6 overflow-hidden">
+              <Image
+                src="/placeholder-logo.svg"
+                alt="Visa Planner Logo"
+                fill
+                className="object-cover rounded-full"
+                priority
+                sizes="80px"
+              />
+            </div>
+            <h1 className="text-4xl font-semibold mb-3">Visa Planner</h1>
+            <p className="text-muted-foreground text-lg mb-8">Select your nationality to start planning your visa-free travel routes</p>
+            <div className="flex justify-center">
+              <NationalityDropdown 
+                nationality={nationality} 
+                onNationalityChange={onNationalityChange}
+                secondaryNationality={secondaryNationality}
+                onSecondaryChange={onSecondaryNationalityChange}
+                className="text-lg px-6 py-3"
+                showSecondaryToggle={false}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      </LazyMotion>
     )
   }
 
@@ -475,17 +504,21 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
     }
 
     const centroid = getCentroidFromMapGeography(geo)
+    const nextCountry = { name: countryName, id: countryId, coordinates: centroid }
 
     if (step === "select-start") {
-      setRoute([{ name: countryName, id: countryId, coordinates: centroid }])
-      setStep("select-destination")
+      dispatch({ type: "add-country", country: nextCountry })
+      persistTrip([nextCountry], false)
       toast.success(`Start: ${countryName}`)
     } else if (step === "select-destination") {
-      setRoute([...route, { name: countryName, id: countryId, coordinates: centroid }])
-      setStep("adding-countries")
+      const nextRoute = [...route, nextCountry]
+      dispatch({ type: "add-country", country: nextCountry })
+      persistTrip(nextRoute, false)
       toast.success(`Destination: ${countryName}`)
     } else if (step === "adding-countries") {
-      setRoute([...route, { name: countryName, id: countryId, coordinates: centroid }])
+      const nextRoute = [...route, nextCountry]
+      dispatch({ type: "add-country", country: nextCountry })
+      persistTrip(nextRoute, false)
     }
   }
 
@@ -579,23 +612,18 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
 
   const removeCountry = (index: number) => {
     const removed = route[index]
-    const newRoute = route.filter((_, i) => i !== index)
-    setRoute(newRoute)
-    if (newRoute.length === 0) {
-      setStep("select-start")
-      setIsRoutePlanned(false)
-    } else if (newRoute.length === 1) {
-      setStep("select-destination")
-      setIsRoutePlanned(false)
-    }
+    const nextRoute = route.filter((_, i) => i !== index)
+    dispatch({ type: "remove-country", index })
+    persistTrip(nextRoute, nextRoute.length > 1 ? isRoutePlanned : false)
     toast.info(`Removed: ${removed.name}`)
   }
 
   const moveCountry = (fromIndex: number, toIndex: number) => {
-    const newRoute = [...route]
-    const [moved] = newRoute.splice(fromIndex, 1)
-    newRoute.splice(toIndex, 0, moved)
-    setRoute(newRoute)
+    const nextRoute = [...route]
+    const [moved] = nextRoute.splice(fromIndex, 1)
+    nextRoute.splice(toIndex, 0, moved)
+    dispatch({ type: "move-country", fromIndex, toIndex })
+    persistTrip(nextRoute, isRoutePlanned)
   }
 
   const handleShare = async () => {
@@ -698,9 +726,10 @@ Plan your own visa-free routes at Visa Planner!`
 
 
   const updateCountry = (index: number, updates: Partial<Country>) => {
-    const newRoute = [...route]
-    newRoute[index] = { ...newRoute[index], ...updates }
-    setRoute(newRoute)
+    const nextRoute = [...route]
+    nextRoute[index] = { ...nextRoute[index], ...updates }
+    dispatch({ type: "update-country", index, updates })
+    persistTrip(nextRoute, isRoutePlanned)
   }
 
   const getTooltipPosition = (mousePos: { x: number; y: number }) => {
@@ -735,13 +764,14 @@ Plan your own visa-free routes at Visa Planner!`
   }
 
   return (
+    <LazyMotion features={domAnimation}>
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm z-10 flex-shrink-0">
         <div className="px-3 py-3 sm:px-4 sm:py-4">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg sm:text-2xl font-bold">Visa Planner</h1>
+              <h1 className="text-lg sm:text-2xl font-semibold">Visa Planner</h1>
               <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 truncate">
                 Made by{" "}
                 <a
@@ -758,7 +788,7 @@ Plan your own visa-free routes at Visa Planner!`
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 sm:h-9 sm:w-9"
+                className="size-8 sm:size-9"
                 onClick={() => {
                   onNationalityChange(null)
                   if (onSecondaryNationalityChange) {
@@ -768,13 +798,13 @@ Plan your own visa-free routes at Visa Planner!`
                 }}
                 title="Reset and return to landing page"
               >
-                <Home className="w-4 h-4" />
+                <Home className="size-4" />
               </Button>
               {!isRoutePlanned && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-1 sm:gap-2 bg-transparent h-8 sm:h-9">
-                      <Filter className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <Filter className="size-3 sm:size-4" />
                       <span className="hidden sm:inline">Filter</span>
                     </Button>
                   </DropdownMenuTrigger>
@@ -806,7 +836,7 @@ Plan your own visa-free routes at Visa Planner!`
 
               {route.length >= 2 && !isRoutePlanned && (
                 <Button onClick={handlePlanRoute} size="sm" className="gap-1 sm:gap-2 h-8 sm:h-9">
-                  <Flag className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <Flag className="size-3 sm:size-4" />
                   <span className="hidden sm:inline">Plan Route</span>
                   <span className="sm:hidden">Plan</span>
                 </Button>
@@ -822,29 +852,29 @@ Plan your own visa-free routes at Visa Planner!`
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="sm" className="gap-1 sm:gap-2 bg-transparent h-8 sm:h-9">
-                        <Share2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <Share2 className="size-3 sm:size-4" />
                         <span className="hidden sm:inline">Share</span>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={handleShare}>
-                        <Share2 className="w-4 h-4 mr-2" />
+                        <Share2 className="size-4 mr-2" />
                         Share trip
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={handleSaveTrip}>
-                        <Save className="w-4 h-4 mr-2" />
+                        <Save className="size-4 mr-2" />
                         Save trip
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={handleExport}>
-                        <Download className="w-4 h-4 mr-2" />
+                        <Download className="size-4 mr-2" />
                         Export as JSON
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
 
                   <Button onClick={() => setShowResetDialog(true)} variant="outline" size="sm" className="gap-1 sm:gap-2 h-8 sm:h-9">
-                    <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <RotateCcw className="size-3 sm:size-4" />
                     <span className="hidden sm:inline">Reset</span>
                   </Button>
                 </>
@@ -852,7 +882,7 @@ Plan your own visa-free routes at Visa Planner!`
 
               {route.length > 0 && !isRoutePlanned && (
                 <Button onClick={() => setShowResetDialog(true)} variant="ghost" size="sm" className="gap-1 sm:gap-2 h-8 sm:h-9">
-                  <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <RotateCcw className="size-3 sm:size-4" />
                   <span className="hidden sm:inline">Reset</span>
                 </Button>
               )}
@@ -869,8 +899,8 @@ Plan your own visa-free routes at Visa Planner!`
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-50">
               <Card className="p-6 max-w-md">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  <p className="text-sm font-medium">Loading visa requirements...</p>
+                  <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <p className="text-sm font-medium">Loading visa requirements…</p>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   ⚠️ Visa requirements change frequently and may not reflect recent policy updates. Always verify current requirements with official embassy sources before travel.
@@ -917,7 +947,7 @@ Plan your own visa-free routes at Visa Planner!`
 
           <AnimatePresence>
             {hoveredCountry && mousePosition && (
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
@@ -938,12 +968,12 @@ Plan your own visa-free routes at Visa Planner!`
                     {tooltipContent}
                   </p>
                 </Card>
-              </motion.div>
+              </m.div>
             )}
           </AnimatePresence>
 
           {isRoutePlanned && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               className={`absolute ${isMobile ? 'top-2 left-2' : 'top-4 left-4'}`}
@@ -952,34 +982,34 @@ Plan your own visa-free routes at Visa Planner!`
                 <h3 className="font-semibold mb-2 text-xs">Visa Requirements</h3>
                 <div className="grid grid-cols-1 gap-1.5 text-xs">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "oklch(0.65 0.18 140)" }} />
+                    <div className="size-3 rounded-sm" style={{ backgroundColor: "oklch(0.65 0.18 140)" }} />
                     <span className={isMobile ? 'text-[10px]' : 'text-xs'}>Visa-Free</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "oklch(0.70 0.20 60)" }} />
+                    <div className="size-3 rounded-sm" style={{ backgroundColor: "oklch(0.70 0.20 60)" }} />
                     <span className={isMobile ? 'text-[10px]' : 'text-xs'}>Visa on Arrival</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "oklch(0.60 0.18 280)" }} />
+                    <div className="size-3 rounded-sm" style={{ backgroundColor: "oklch(0.60 0.18 280)" }} />
                     <span className={isMobile ? 'text-[10px]' : 'text-xs'}>eVisa</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "oklch(0.55 0.22 25)" }} />
+                    <div className="size-3 rounded-sm" style={{ backgroundColor: "oklch(0.55 0.22 25)" }} />
                     <span className={isMobile ? 'text-[10px]' : 'text-xs'}>Visa Required</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "oklch(0.35 0.15 0)" }} />
+                    <div className="size-3 rounded-sm" style={{ backgroundColor: "oklch(0.35 0.15 0)" }} />
                     <span className={isMobile ? 'text-[10px]' : 'text-xs'}>No Admission</span>
                   </div>
                 </div>
               </Card>
-            </motion.div>
+            </m.div>
           )}
 
 
           {/* Mobile Trip Details Hint - only in plan mode */}
           {isMobile && route.length > 0 && isRoutePlanned && !showTripDetails && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-40"
@@ -990,12 +1020,12 @@ Plan your own visa-free routes at Visa Planner!`
               >
                 <div className="flex items-center gap-2 text-center">
                   <span className="text-sm font-medium">View Trip Details</span>
-                  <motion.div
+                  <m.div
                     animate={{ y: [0, -2, 0] }}
                     transition={{ duration: 1.5, repeat: Infinity }}
                   >
                     <svg 
-                      className="w-4 h-4 text-primary" 
+                      className="size-4 text-primary" 
                       fill="none" 
                       stroke="currentColor" 
                       viewBox="0 0 24 24"
@@ -1007,10 +1037,10 @@ Plan your own visa-free routes at Visa Planner!`
                         d="M5 15l7-7 7 7" 
                       />
                     </svg>
-                  </motion.div>
+                  </m.div>
                 </div>
               </Card>
-            </motion.div>
+            </m.div>
           )}
         </div>
 
@@ -1065,5 +1095,6 @@ Plan your own visa-free routes at Visa Planner!`
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </LazyMotion>
   )
 }

@@ -1,21 +1,37 @@
 "use client"
 
-import { motion } from "framer-motion"
-import { Marker, Line, useMapContext, useZoomPanContext } from "react-simple-maps"
+import { LazyMotion, domAnimation, m } from "framer-motion"
+import { Marker, useMapContext, useZoomPanContext } from "react-simple-maps"
 import type { Country } from "@/lib/visa-data"
 
 interface RouteLinesProps {
   route: Country[]
 }
 
+const markerGroupStyle = {
+  userSelect: "none",
+  WebkitUserSelect: "none",
+  MozUserSelect: "none",
+  msUserSelect: "none",
+} as const
+
+const waypointTextStyle = {
+  fill: "oklch(0.12 0.01 240)",
+  fontWeight: "bold",
+  pointerEvents: "none",
+  userSelect: "none",
+  WebkitUserSelect: "none",
+  MozUserSelect: "none",
+  msUserSelect: "none",
+} as const
+
 // Component to render markers with zoom-based scaling and smooth transitions
-function MarkerWithZoom({ country, index, isStart, isEnd, isWaypoint, route }: {
+function MarkerWithZoom({ country, index, isStart, isEnd, isWaypoint }: {
   country: Country
   index: number
   isStart: boolean
   isEnd: boolean
   isWaypoint: boolean
-  route: Country[]
 }) {
   const { k: zoom } = useZoomPanContext()
   
@@ -32,12 +48,12 @@ function MarkerWithZoom({ country, index, isStart, isEnd, isWaypoint, route }: {
   const shadowColor = isStart ? 'oklch(0.75 0.15 180 / 0.6)' : isEnd ? 'oklch(0.65 0.18 140 / 0.8)' : 'oklch(0.70 0.20 60 / 0.8)'
 
   return (
-    <g style={{ userSelect: "none", WebkitUserSelect: "none", MozUserSelect: "none", msUserSelect: "none" }}>
+    <g style={markerGroupStyle}>
       {/* Main circle - always present */}
-      <motion.circle
+      <m.circle
         key={`circle-${country.id}-${markerType}`} // Key changes when marker type changes
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.2 }}
         r={radius}
         fill={fillColor}
@@ -50,10 +66,10 @@ function MarkerWithZoom({ country, index, isStart, isEnd, isWaypoint, route }: {
       
       {/* Flag pole - only for start and end markers */}
       {(isStart || isEnd) && (
-        <motion.path
+        <m.path
           key={`flag-${country.id}-${markerType}`} // Key changes when marker type changes
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.2 }}
           d={`M 0,-${radius} L 0,-${radius * 2.5} L ${radius * 1.3},-${radius * 2.2} L 0,-${radius * 1.7} Z`}
           fill={fillColor}
@@ -67,7 +83,7 @@ function MarkerWithZoom({ country, index, isStart, isEnd, isWaypoint, route }: {
       
       {/* Number - only for waypoint markers */}
       {isWaypoint && (
-        <motion.text
+        <m.text
           key={`text-${country.id}-${markerType}`} // Key changes when marker type changes
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -76,19 +92,10 @@ function MarkerWithZoom({ country, index, isStart, isEnd, isWaypoint, route }: {
           dominantBaseline="middle"
           x={0}
           y={0}
-          style={{
-            fontSize: `${fontSize}px`,
-            fill: "oklch(0.12 0.01 240)",
-            fontWeight: "bold",
-            pointerEvents: "none",
-            userSelect: "none",
-            WebkitUserSelect: "none",
-            MozUserSelect: "none",
-            msUserSelect: "none",
-          }}
+          style={{ ...waypointTextStyle, fontSize: `${fontSize}px` }}
         >
           {index}
-        </motion.text>
+        </m.text>
       )}
     </g>
   )
@@ -138,7 +145,7 @@ function CurvedLine({ from, to, index }: { from: [number, number], to: [number, 
   const path = `M${x0},${y0} C${controlPoint1[0]},${controlPoint1[1]} ${controlPoint2[0]},${controlPoint2[1]} ${x1},${y1}`
 
   return (
-    <motion.path
+    <m.path
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }} // All lines appear at once
@@ -157,7 +164,7 @@ function CurvedLine({ from, to, index }: { from: [number, number], to: [number, 
 
 export function RouteLines({ route }: RouteLinesProps) {
   return (
-    <>
+    <LazyMotion features={domAnimation}>
       {/* Define gradient for the route lines */}
       <defs>
         <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -191,10 +198,10 @@ export function RouteLines({ route }: RouteLinesProps) {
 
         return (
           <Marker key={`marker-${country.id}`} coordinates={country.coordinates}>
-            <MarkerWithZoom country={country} index={index} isStart={isStart} isEnd={isEnd} isWaypoint={isWaypoint} route={route} />
+            <MarkerWithZoom country={country} index={index} isStart={isStart} isEnd={isEnd} isWaypoint={isWaypoint} />
           </Marker>
         )
       })}
-    </>
+    </LazyMotion>
   )
 }

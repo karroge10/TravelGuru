@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, AnimatePresence } from "framer-motion"
+import { AnimatePresence, LazyMotion, domAnimation, m } from "framer-motion"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { calculateTotalDistance, type Country } from "@/lib/visa-data"
@@ -55,6 +55,17 @@ interface TripDetailsProps {
   isMobile?: boolean
   showTripDetails?: boolean
   onCloseTripDetails?: () => void
+}
+
+const stableDateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "numeric",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+})
+
+function formatStableDate(date: string) {
+  return stableDateFormatter.format(new Date(date))
 }
 
 // Sortable Country Item Component
@@ -207,7 +218,7 @@ function CountryItem({
   }
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
@@ -224,7 +235,7 @@ function CountryItem({
               title="Drag to reorder"
               style={{ touchAction: 'none' }}
             >
-              <GripVertical className="w-4 h-4 text-muted-foreground" />
+              <GripVertical className="size-4 text-muted-foreground" />
             </div>
           </div>
 
@@ -232,15 +243,15 @@ function CountryItem({
             <div className="flex items-center justify-between gap-2 min-h-6">
               <div className="flex items-center gap-2 min-w-0">
                 {isStart ? (
-                  <div className="w-6 h-6 rounded-full bg-[oklch(0.75_0.15_180)] flex items-center justify-center flex-shrink-0">
-                    <Flag className="w-3 h-3 text-background" />
+                  <div className="size-6 rounded-full bg-[oklch(0.75_0.15_180)] flex items-center justify-center flex-shrink-0">
+                    <Flag className="size-3 text-background" />
                   </div>
                 ) : isEnd ? (
-                  <div className="w-6 h-6 rounded-full bg-[oklch(0.65_0.18_140)] flex items-center justify-center flex-shrink-0">
-                    <Navigation className="w-3 h-3 text-background" />
+                  <div className="size-6 rounded-full bg-[oklch(0.65_0.18_140)] flex items-center justify-center flex-shrink-0">
+                    <Navigation className="size-3 text-background" />
                   </div>
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-[oklch(0.70_0.20_60)] flex items-center justify-center text-xs font-bold text-background flex-shrink-0">
+                  <div className="size-6 rounded-full bg-[oklch(0.70_0.20_60)] flex items-center justify-center text-xs font-bold text-background flex-shrink-0">
                     {index}
                   </div>
                 )}
@@ -254,11 +265,11 @@ function CountryItem({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive flex-shrink-0"
+                className="size-6 hover:bg-destructive/10 hover:text-destructive flex-shrink-0"
                 onClick={() => onRemove(index)}
                 title="Remove country"
               >
-                <X className="w-3 h-3" />
+                <X className="size-3" />
               </Button>
             </div>
 
@@ -309,7 +320,7 @@ function CountryItem({
 
                       <div className="space-y-2">
                         <div className="flex items-start gap-2">
-                          <FileText className="w-4 h-4 text-muted-foreground mt-0.5" />
+                          <FileText className="size-4 text-muted-foreground mt-0.5" />
                           <div>
                             <p className="text-sm font-medium">Requirement</p>
                             <p className="text-sm text-muted-foreground">{getVisaLabel(requirementType)}</p>
@@ -318,7 +329,7 @@ function CountryItem({
 
                         {isCombined && secondaryNationality && combinedReq && (
                           <div className="flex items-start gap-2">
-                            <Flag className="w-4 h-4 text-muted-foreground mt-0.5" />
+                            <Flag className="size-4 text-muted-foreground mt-0.5" />
                             <div>
                               <p className="text-sm font-medium">Best Passport</p>
                               <p className="text-sm text-muted-foreground">
@@ -344,7 +355,7 @@ function CountryItem({
 
                         {visaReq?.duration && (
                           <div className="flex items-start gap-2">
-                            <Clock className="w-4 h-4 text-muted-foreground mt-0.5" />
+                            <Clock className="size-4 text-muted-foreground mt-0.5" />
                             <div>
                               <p className="text-sm font-medium">Duration</p>
                               <p className="text-sm text-muted-foreground">{visaReq.duration} days</p>
@@ -367,7 +378,7 @@ function CountryItem({
                         {visaReq?.lastUpdated && (
                           <div className="pt-2 border-t border-border space-y-1">
                             <p className="text-xs text-muted-foreground">
-                              API last updated: {new Date(visaReq.lastUpdated).toLocaleDateString()}
+                              API last updated: {formatStableDate(visaReq.lastUpdated)}
                             </p>
                           </div>
                         )}
@@ -380,22 +391,22 @@ function CountryItem({
 
             {country.dates && (
               <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                {new Date(country.dates.arrival).toLocaleDateString()} -{" "}
-                {new Date(country.dates.departure).toLocaleDateString()}
+                <Calendar className="size-3" />
+                {formatStableDate(country.dates.arrival)} -{" "}
+                {formatStableDate(country.dates.departure)}
               </div>
             )}
 
             {country.notes && (
               <div className="text-xs text-muted-foreground mb-2 flex items-start gap-1">
-                <StickyNote className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                <StickyNote className="size-3 mt-0.5 flex-shrink-0" />
                 <span className="line-clamp-2">{country.notes}</span>
               </div>
             )}
           </div>
         </div>
       </Card>
-    </motion.div>
+    </m.div>
   )
 }
 
@@ -453,9 +464,10 @@ export function TripDetails({
 
   if (isMobile) {
     return (
+      <LazyMotion features={domAnimation}>
       <AnimatePresence>
         {showTripDetails && (
-          <motion.div
+          <m.div
             initial={{ y: "100%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
@@ -465,15 +477,15 @@ export function TripDetails({
             {/* Mobile header */}
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div>
-                <h2 className="text-lg font-bold">Your Trip Details</h2>
+                <h2 className="text-lg font-semibold">Your Trip Details</h2>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={onCloseTripDetails}
-                className="h-8 w-8"
+                className="size-8"
               >
-                <X className="w-4 h-4" />
+                <X className="size-4" />
               </Button>
             </div>
             
@@ -485,27 +497,27 @@ export function TripDetails({
                 </p>
                 {apiLastUpdated && (
                   <p className="text-xs text-muted-foreground mb-4">
-                    API last updated: {new Date(apiLastUpdated).toLocaleDateString()}
+                    API last updated: {formatStableDate(apiLastUpdated)}
                   </p>
                 )}
 
                 {isPlanned && (
                   <Card className="p-4 bg-card border-border/50 mb-4">
                     <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                      <Plane className="w-4 h-4" />
+                      <Plane className="size-4" />
                       Trip Statistics
                     </h3>
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground flex items-center gap-2">
-                          <MapPin className="w-3.5 h-3.5" />
+                          <MapPin className="size-3.5" />
                           Total distance
                         </span>
                         <span className="font-semibold">{totalDistance.toLocaleString()} km</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground flex items-center gap-2">
-                          <Flag className="w-3.5 h-3.5" />
+                          <Flag className="size-3.5" />
                           Visa-free
                         </span>
                         <span className="font-semibold text-[oklch(0.65_0.18_140)]">
@@ -545,14 +557,16 @@ export function TripDetails({
                 </DndContext>
               </div>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
+      </LazyMotion>
     )
   }
 
   return (
-    <motion.div
+    <LazyMotion features={domAnimation}>
+    <m.div
       initial={{ x: 400, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ type: "spring", damping: 25 }}
@@ -560,13 +574,13 @@ export function TripDetails({
     >
       <div className="flex-shrink-0 p-6 pb-4">
         <div>
-          <h2 className="text-xl font-bold mb-2">Your Trip</h2>
+          <h2 className="text-xl font-semibold mb-2">Your Trip</h2>
           <p className="text-xs text-muted-foreground">
             Visa policies can change quickly. Always verify with official embassy or immigration sources before travel.
           </p>
           {apiLastUpdated && (
             <p className="text-xs text-muted-foreground mt-1">
-              API last updated: {new Date(apiLastUpdated).toLocaleDateString()}
+              API last updated: {formatStableDate(apiLastUpdated)}
             </p>
           )}
         </div>
@@ -574,20 +588,20 @@ export function TripDetails({
         {isPlanned && (
           <Card className="p-4 bg-card border-border/50 mt-6">
             <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-              <Plane className="w-4 h-4" />
+              <Plane className="size-4" />
               Trip Statistics
             </h3>
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground flex items-center gap-2">
-                  <MapPin className="w-3.5 h-3.5" />
+                  <MapPin className="size-3.5" />
                   Total distance
                 </span>
                 <span className="font-semibold">{totalDistance.toLocaleString()} km</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground flex items-center gap-2">
-                  <Flag className="w-3.5 h-3.5" />
+                  <Flag className="size-3.5" />
                   Visa-free
                 </span>
                 <span className="font-semibold text-[oklch(0.65_0.18_140)]">
@@ -626,7 +640,8 @@ export function TripDetails({
           </SortableContext>
         </DndContext>
       </div>
-    </motion.div>
+    </m.div>
+    </LazyMotion>
   )
 }
 

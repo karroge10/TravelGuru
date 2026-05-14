@@ -241,6 +241,7 @@ function SingleDropdown({
 }) {
   const [open, setOpen] = useState(false)
   const selectedCountry = countries.find(country => country.code === value)
+  const popoverId = `${label.toLowerCase().replace(/\s+/g, "-")}-countries-list`
 
   const filteredCountries = useMemo(() => {
     return countries
@@ -254,6 +255,7 @@ function SingleDropdown({
         <Button
           variant="ghost"
           role="combobox"
+          aria-controls={popoverId}
           aria-expanded={open}
           className={cn("justify-between gap-2", className)}
         >
@@ -261,7 +263,7 @@ function SingleDropdown({
             {selectedCountry ? (
               <FlagImage isoCode={selectedCountry.code} size={16} className="inline-block" />
             ) : (
-              <Globe className="w-4 h-4" />
+              <Globe className="size-4" />
             )}
             <span className="hidden sm:inline">{selectedCountry ? selectedCountry.name : label}</span>
             <span className="sm:hidden">{selectedCountry ? selectedCountry.name : label}</span>
@@ -269,7 +271,7 @@ function SingleDropdown({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[90vw] sm:w-[300px] p-0" align="center" side="bottom" sideOffset={5}>
-        <Command>
+        <Command id={popoverId}>
           <CommandInput placeholder="Search countries..." />
           <CommandList>
             <CommandEmpty>No country found.</CommandEmpty>
@@ -285,7 +287,7 @@ function SingleDropdown({
                 >
                   <Check
                     className={cn(
-                      "mr-2 h-4 w-4",
+                      "mr-2 size-4",
                       value === country.code ? "opacity-100" : "opacity-0"
                     )}
                   />
@@ -310,6 +312,7 @@ export function NationalityDropdown({
   showSecondaryToggle = true
 }: NationalityDropdownProps) {
   const [secondaryOpen, setSecondaryOpen] = useState(false)
+  const [secondaryPassportOpen, setSecondaryPassportOpen] = useState(false)
   const hasSecondary = secondaryNationality !== null && secondaryNationality !== undefined
 
   return (
@@ -328,10 +331,10 @@ export function NationalityDropdown({
               <Button
                 variant="outline"
                 size="icon"
-                className={cn("h-8 w-8 sm:h-9 sm:w-9 border-dashed", className)}
+                className={cn("size-8 sm:size-9 border-dashed", className)}
                 title="Add second passport"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="size-4" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[90vw] sm:w-[300px] p-0" align="center" side="bottom" sideOffset={5}>
@@ -352,7 +355,7 @@ export function NationalityDropdown({
                             setSecondaryOpen(false)
                           }}
                         >
-                          <Check className="mr-2 h-4 w-4 opacity-0" />
+                          <Check className="mr-2 size-4 opacity-0" />
                           <FlagImage isoCode={country.code} size={16} className="mr-2 inline-block" />
                           {country.name}
                         </CommandItem>
@@ -367,11 +370,13 @@ export function NationalityDropdown({
       
       {hasSecondary && onSecondaryChange && (
         <div className="flex items-center gap-1.5 pl-2 border-l-2 border-primary/30">
-          <Popover>
+          <Popover open={secondaryPassportOpen} onOpenChange={setSecondaryPassportOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="ghost"
                 role="combobox"
+                aria-controls="secondary-passport-countries-list"
+                aria-expanded={secondaryPassportOpen}
                 className={cn("justify-between gap-2 relative pr-8", className)}
               >
                 <span className="flex items-center gap-2 flex-1 min-w-0">
@@ -387,7 +392,7 @@ export function NationalityDropdown({
                     </>
                   ) : (
                     <>
-                      <Globe className="w-4 h-4 flex-shrink-0" />
+                      <Globe className="size-4 flex-shrink-0" />
                       <span>Second passport</span>
                     </>
                   )}
@@ -411,13 +416,13 @@ export function NationalityDropdown({
                       }
                     }}
                   >
-                    <X className="w-3 h-3" />
+                    <X className="size-3" />
                   </span>
                 )}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[90vw] sm:w-[300px] p-0" align="center" side="bottom" sideOffset={5}>
-              <Command>
+              <Command id="secondary-passport-countries-list">
                 <CommandInput placeholder="Search countries..." />
                 <CommandList>
                   <CommandEmpty>No country found.</CommandEmpty>
@@ -431,9 +436,10 @@ export function NationalityDropdown({
                           value={country.name}
                           onSelect={() => {
                             onSecondaryChange(country.code)
+                            setSecondaryPassportOpen(false)
                           }}
                         >
-                          <Check className="mr-2 h-4 w-4 opacity-0" />
+                          <Check className="mr-2 size-4 opacity-0" />
                           <FlagImage isoCode={country.code} size={16} className="mr-2 inline-block" />
                           {country.name}
                         </CommandItem>
