@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import Image from "next/image"
 import { getFlagUrl } from "@/lib/country-mapping"
 import { Globe } from "lucide-react"
@@ -13,10 +13,10 @@ interface FlagImageProps {
 }
 
 export function FlagImage({ isoCode, size = 16, className = "", title }: FlagImageProps) {
-  const [hasError, setHasError] = useState(false)
+  const hasErrorRef = useRef(false)
   const [imageKey, setImageKey] = useState(0)
   
-  if (!isoCode || isoCode.length !== 2 || hasError) {
+  if (!isoCode || isoCode.length !== 2 || imageKey < 0) {
     return (
       <span
         className={className}
@@ -43,8 +43,9 @@ export function FlagImage({ isoCode, size = 16, className = "", title }: FlagIma
       style={{ width: size, height, objectFit: "cover", display: "inline-block" }}
       title={title}
       onError={() => {
-        setHasError(true)
-        setImageKey((prev) => prev + 1)
+        if (hasErrorRef.current) return
+        hasErrorRef.current = true
+        setImageKey(-1)
       }}
       loading="lazy"
       unoptimized

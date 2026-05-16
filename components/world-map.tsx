@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import React, { useState, useEffect, useMemo, useCallback, useEffectEvent } from "react"
+import React, { useState, useEffect, useMemo, useCallback, useEffectEvent, useReducer } from "react"
 import { AnimatePresence, LazyMotion, domAnimation, m } from "framer-motion"
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps"
 import { Card } from "@/components/ui/card"
@@ -52,6 +52,29 @@ interface WorldMapProps {
 }
 
 type Step = "select-start" | "select-destination" | "adding-countries"
+
+type VisaState = {
+  requirements: Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>
+  isLoading: boolean
+}
+
+type VisaAction =
+  | { type: "start" }
+  | { type: "loaded"; requirements: Record<string, ProcessedVisaRequirement | CombinedVisaRequirement> }
+  | { type: "clear" }
+
+function visaReducer(state: VisaState, action: VisaAction): VisaState {
+  switch (action.type) {
+    case "start":
+      return { ...state, isLoading: true }
+    case "loaded":
+      return { requirements: action.requirements, isLoading: false }
+    case "clear":
+      return { requirements: {}, isLoading: false }
+    default:
+      return state
+  }
+}
 
 interface WorldMapHeaderProps {
   nationality: string
@@ -341,7 +364,7 @@ function GeographiesWrapper({
   )
 }
 
-export function WorldMap({ nationality, onNationalityChange, secondaryNationality = null, onSecondaryNationalityChange }: WorldMapProps) {
+function useWorldMapView({ nationality, onNationalityChange, secondaryNationality = null, onSecondaryNationalityChange }: WorldMapProps) {
   const isMobile = useIsMobile()
   const [tripState, setTripState] = useState({
     step: "select-start" as Step,
@@ -358,8 +381,11 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
   const [showEVisaOnly, setShowEVisaOnly] = useState(false)
   const [showOnArrivalOnly, setShowOnArrivalOnly] = useState(false)
   const [allGeographies, setAllGeographies] = useState<MapGeography[]>([])
-  const [visaRequirements, setVisaRequirements] = useState<Record<string, ProcessedVisaRequirement | CombinedVisaRequirement>>({})
-  const [isLoadingVisa, setIsLoadingVisa] = useState(true)
+  const [visaState, dispatchVisa] = useReducer(visaReducer, {
+    requirements: {},
+    isLoading: true,
+  })
+  const { requirements: visaRequirements, isLoading: isLoadingVisa } = visaState
   const { step, route, isRoutePlanned, showResetDialog, showTripDetails } = tripState
 
   const setStep = useCallback((nextStep: Step) => {
@@ -470,15 +496,14 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
 
   useEffect(() => {
     if (!nationality) {
-      setVisaRequirements({})
-      setIsLoadingVisa(false)
+      dispatchVisa({ type: "clear" })
       return
     }
 
     let cancelled = false
 
     const fetchVisaData = async () => {
-      setIsLoadingVisa(true)
+      dispatchVisa({ type: "start" })
       try {
         const primaryResult = await getVisaRequirementsForNationality(nationality)
 
@@ -506,14 +531,14 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
 
         if (cancelled) return
 
+        let nextRequirements: Record<string, ProcessedVisaRequirement | CombinedVisaRequirement> = {}
+
         if (secondaryNationality && Object.keys(primaryRequirements).length > 0 && Object.keys(secondaryRequirements).length > 0) {
-          setVisaRequirements(
-            combineVisaRequirements(
-              primaryRequirements,
-              secondaryRequirements,
-              nationality,
-              secondaryNationality
-            )
+          nextRequirements = combineVisaRequirements(
+            primaryRequirements,
+            secondaryRequirements,
+            nationality,
+            secondaryNationality
           )
         } else if (Object.keys(primaryRequirements).length > 0) {
           const requirements = { ...primaryRequirements }
@@ -525,20 +550,16 @@ export function WorldMap({ nationality, onNationalityChange, secondaryNationalit
               notes: "No visa required for own country",
             }
           }
-          setVisaRequirements(requirements)
-        } else {
-          setVisaRequirements({})
+          nextRequirements = requirements
         }
+
+        dispatchVisa({ type: "loaded", requirements: nextRequirements })
       } catch {
         if (!cancelled) {
           toast.error("Failed to load visa requirements", {
             description: "Network error occurred. Please try again.",
           })
-          setVisaRequirements({})
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingVisa(false)
+          dispatchVisa({ type: "clear" })
         }
       }
     }
@@ -1164,6 +1185,10 @@ Plan your own visa-free routes at Visa Planner!`
       </div>
     </LazyMotion>
   )
+}
+
+export function WorldMap(props: WorldMapProps) {
+  return useWorldMapView(props)
 }
 
 
