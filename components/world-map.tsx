@@ -970,7 +970,7 @@ Plan your own visa-free routes at Visa Planner!`
                   <p className="text-sm font-medium">Loading visa requirements…</p>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  âš ï¸ Visa requirements change frequently and may not reflect recent policy updates. Always verify current requirements with official embassy sources before travel.
+                  Warning: Visa requirements change frequently and may not reflect recent policy updates. Always verify current requirements with official embassy sources before travel.
                 </p>
               </Card>
             </div>
